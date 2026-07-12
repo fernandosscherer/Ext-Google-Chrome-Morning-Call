@@ -1,6 +1,7 @@
 const USE_MOCK = false
 
 const BRAPI_BASE = 'https://brapi.dev/api/v2/futures'
+const BRAPI_TOKEN = 'o4MLheSdTFEL2ogBViwpSq'
 const MARKETAUX_BASE = 'https://api.marketaux.com'
 const MARKETAUX_TOKEN = '90tD0ZEkEwtAe6gPNIm4nhYECulBvk1JoZenQKYe'
 
@@ -296,7 +297,7 @@ async function fetchQuote(symbol) {
   const cached = await getCache(`quote_${symbol}`)
   if (cached) return cached
   try {
-    const res = await fetch(`${BRAPI_BASE}/quote?symbols=${symbol}`)
+    const res = await fetch(`${BRAPI_BASE}/quote?symbols=${symbol}&token=${BRAPI_TOKEN}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const body = await res.json()
     const q = body.quotes?.[0]

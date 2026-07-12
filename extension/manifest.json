@@ -24,7 +24,8 @@
     "default_path": "popup.html"
   },
   "host_permissions": [
-    "https://brapi.dev/*"
+    "https://brapi.dev/*",
+    "https://api.marketaux.com/*"
   ],
   "icons": {
     "16": "icons/16.png",
