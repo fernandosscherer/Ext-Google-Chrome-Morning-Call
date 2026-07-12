@@ -2,7 +2,7 @@ const USE_MOCK = false
 
 const BRAPI_BASE = 'https://brapi.dev/api/v2/futures'
 const MARKETAUX_BASE = 'https://api.marketaux.com'
-const MARKETAUX_TOKEN = 'SUA_CHAVE_AQUI'
+const MARKETAUX_TOKEN = '90tD0ZEkEwtAe6gPNIm4nhYECulBvk1JoZenQKYe'
 
 const CACHE_TTL = {
   quote: 60 * 1000,
