@@ -1,6 +1,8 @@
 const USE_MOCK = false
 
 const BRAPI_BASE = 'https://brapi.dev/api/v2/futures'
+const MARKETAUX_BASE = 'https://api.marketaux.com'
+const MARKETAUX_TOKEN = 'SUA_CHAVE_AQUI'
 
 const CACHE_TTL = {
   quote: 60 * 1000,
@@ -197,11 +199,25 @@ const SENTIMENT_BULLISH = ['est\u00edmulo', 'pacote', 'alta', 'crescimento', 'im
 function computeNewsSentiment(news) {
   let bearishScore = 0
   let bullishScore = 0
-  ;(news || []).forEach(n => {
-    const t = (n.title || '').toLowerCase()
-    SENTIMENT_BEARISH.forEach(k => { if (t.includes(k)) bearishScore++ })
-    SENTIMENT_BULLISH.forEach(k => { if (t.includes(k)) bullishScore++ })
-  })
+
+  const hasEntitySentiment = (news || []).some(n => n.entities && n.entities.length > 0)
+
+  if (hasEntitySentiment) {
+    ;(news || []).forEach(n => {
+      const entities = n.entities || []
+      if (entities.length === 0) return
+      const avg = entities.reduce((s, e) => s + (e.sentiment_score || 0), 0) / entities.length
+      if (avg > 0.15) bullishScore++
+      else if (avg < -0.15) bearishScore++
+    })
+  } else {
+    ;(news || []).forEach(n => {
+      const t = (n.title || '').toLowerCase()
+      SENTIMENT_BEARISH.forEach(k => { if (t.includes(k)) bearishScore++ })
+      SENTIMENT_BULLISH.forEach(k => { if (t.includes(k)) bullishScore++ })
+    })
+  }
+
   return { bearishScore, bullishScore }
 }
 
@@ -307,7 +323,26 @@ async function fetchCalendar() {
 }
 
 async function fetchNews() {
-  return [...MOCK.news]
+  if (USE_MOCK) return [...MOCK.news]
+  try {
+    const res = await fetch(
+      `${MARKETAUX_BASE}/v1/news/all?` +
+      `countries=br&language=pt&` +
+      `filter_entities=true&must_have_entities=true&` +
+      `limit=5&api_token=${MARKETAUX_TOKEN}`
+    )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const body = await res.json()
+    return (body.data || []).map(article => ({
+      title: article.title,
+      source: article.source,
+      timeAgo: timeAgo(article.published_at),
+      url: article.url,
+      entities: article.entities || [],
+    }))
+  } catch {
+    return [...MOCK.news]
+  }
 }
 
 async function fetchMarketScore() {
@@ -327,8 +362,20 @@ function formatCacheTime(dateStr) {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `${mins}min atr\u00e1s`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h atr\u00e1s`
+  const days = Math.floor(hours / 24)
+  return `${days}d atr\u00e1s`
+}
+
 export {
   USE_MOCK,
+  MARKETAUX_TOKEN,
   ASSET_LIST,
   COUNTRY_FLAG,
   CACHE_TTL,
