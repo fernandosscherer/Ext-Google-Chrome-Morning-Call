@@ -1,0 +1,16 @@
+name = "opera-proxy"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+BRAPI_BASE = "https://brapi.dev/api/v2"
+BCB_BASE = "https://api.bcb.gov.br/dados/serie"
+# EXTENSION_ID = "YOUR_EXTENSION_ID"  # descomente e preencha após publicar a extensão (ex.: abcdef123456)
+
+# Secrets (set via wrangler secret put BRAPI_TOKEN and FOUNDER_LICENSE_KEY)
+# For local dev, use .dev.vars file
+
+# KV namespace for cache (optional, create via: wrangler kv:namespace create CACHE)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "your-kv-namespace-id"

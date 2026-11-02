@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pol&iacute;tica de Privacidade &mdash; Opera Morning Call</title>
+  <meta name="description" content="Pol&iacute;tica de privacidade da extens&atilde;o Opera Morning Call para Google Chrome.">
+  <meta name="theme-color" content="#02080B">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Pol&iacute;tica de Privacidade &mdash; Opera Morning Call">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+
+  <!-- Theme: apply before paint (no flash) -->
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch(e) {}
+    })();
+  </script>
+
+  <!-- Fonts: preconnect + Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@500;600&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="16x16" href="../extension/icons/16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="../extension/icons/32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="../extension/icons/48.png">
+
+  <style>
+    .legal {
+      padding: 140px 0 80px;
+    }
+
+    .legal__inner {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .legal__label {
+      display: inline-block;
+      font-family: var(--font-data);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 12px;
+    }
+
+    .legal h1 {
+      font-family: var(--font-heading);
+      font-weight: 600;
+      font-size: clamp(28px, 4vw, 40px);
+      color: var(--color-heading);
+      line-height: 1.15;
+      margin-bottom: 8px;
+    }
+
+    .legal .legal__date {
+      font-size: 14px;
+      color: var(--color-muted);
+      margin-bottom: 40px;
+    }
+
+    .legal h2 {
+      font-family: var(--font-heading);
+      font-weight: 600;
+      font-size: 20px;
+      color: var(--color-heading);
+      margin-top: 32px;
+      margin-bottom: 10px;
+    }
+
+    .legal p {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--color-text);
+      margin-bottom: 14px;
+    }
+
+    .legal ul {
+      margin-bottom: 14px;
+      padding-left: 24px;
+    }
+
+    .legal li {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--color-text);
+      margin-bottom: 6px;
+    }
+
+    .legal a {
+      color: var(--color-petrol);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .legal a:hover {
+      opacity: 0.8;
+    }
+
+    .legal code {
+      font-family: var(--font-data);
+      font-size: 0.9em;
+      background: var(--color-surface-soft);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 1px 6px;
+    }
+
+    .legal strong {
+      color: var(--color-heading);
+    }
+
+    @media (max-width: 767px) {
+      .legal {
+        padding: 110px 0 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================
+       NAVBAR
+       ============================================ -->
+  <nav class="nav" role="navigation" aria-label="Navega&ccedil;&atilde;o principal">
+    <div class="nav__inner">
+      <div class="nav__brand">
+        <div class="nav__logo">
+          <svg class="nav__logoSvg" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+            <path d="M144 32a80 80 0 1 0 0 160 80 80 0 0 0 0-160Zm0 130a50 50 0 1 1 0-100 50 50 0 0 1 0 100Z" fill="currentColor"/>
+            <path d="M144 62v42l30 20" stroke="var(--color-bronze)" stroke-width="14" stroke-linecap="round" fill="none"/>
+            <path d="M228 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
+            <path d="M298 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
+            <path d="M368 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
+            <path d="M78 208h306a12 12 0 0 1 12 12v168a86 86 0 0 1-86 86H152a86 86 0 0 1-86-86V220a12 12 0 0 1 12-12Z" class="cup-body" stroke="currentColor" stroke-width="16"/>
+            <path d="M396 250h56a44 44 0 0 1 44 44v40a76 76 0 0 1-76 76h-24" fill="none" stroke="currentColor" stroke-width="16"/>
+            <circle cx="330" cy="290" r="9" fill="var(--color-bronze)"/>
+            <rect x="322" y="320" width="16" height="60" rx="8" fill="var(--color-bronze)"/>
+            <path d="M40 442h380a10 10 0 0 1 10 10 62 62 0 0 1-62 62H92a62 62 0 0 1-62-62 10 10 0 0 1 10-10Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <a class="nav__name" href="index.html">Opera Morning Call</a>
+      </div>
+
+      <ul class="nav__links">
+        <li><a class="nav__link" href="index.html#rotina">Como funciona</a></li>
+        <li><a class="nav__link" href="index.html#recursos">Recursos</a></li>
+      </ul>
+
+      <div class="nav__actions">
+        <button class="nav__themeBtn" data-action="toggle-theme" data-theme-icon aria-label="Alternar tema">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+          </svg>
+        </button>
+        <a class="btn-primary" href="index.html#instalar" data-track="install" data-location="nav">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Adicionar ao Chrome
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ============================================
+       CONTEUDO
+       ============================================ -->
+  <main class="legal">
+    <div class="container">
+      <div class="legal__inner">
+        <span class="legal__label">Legal</span>
+        <h1>Pol&iacute;tica de Privacidade</h1>
+        <p class="legal__date"><strong>Opera Morning Call</strong> &mdash; Extens&atilde;o Google Chrome<br>&Uacute;ltima atualiza&ccedil;&atilde;o: Agosto de 2026</p>
+
+        <p>A extens&atilde;o <strong>Opera Morning Call</strong> respeita sua privacidade. Esta pol&iacute;tica descreve como lidamos com seus dados.</p>
+
+        <h2>Coleta de Dados</h2>
+        <p>Esta extens&atilde;o <strong>n&atilde;o coleta dados pessoais identific&aacute;veis</strong> dos usu&aacute;rios. Prefer&ecirc;ncias como tema e favoritos s&atilde;o armazenadas no navegador (<code>chrome.storage</code>). Quando o usu&aacute;rio valida uma licen&ccedil;a, a chave &eacute; enviada ao proxy pr&oacute;prio para valida&ccedil;&atilde;o.</p>
+
+        <h2>Dados de Terceiros</h2>
+        <p>Para fornecer suas funcionalidades, a extens&atilde;o faz requisi&ccedil;&otilde;es a APIs externas:</p>
+        <ul>
+          <li><strong>opera-proxy.datamapleai.workers.dev</strong> &mdash; Proxy pr&oacute;prio que consulta cota&ccedil;&otilde;es, indicadores macro e not&iacute;cias consolidadas. Nenhum dado pessoal &eacute; enviado.</li>
+          <li><strong>TradingView</strong> &mdash; Widget de calend&aacute;rio econ&ocirc;mico incorporado via iframe. A TradingView pode coletar dados de navega&ccedil;&atilde;o an&ocirc;nimos conforme sua pr&oacute;pria <a href="https://www.tradingview.com/privacy-policy/" target="_blank" rel="noopener">pol&iacute;tica de privacidade</a>.</li>
+        </ul>
+
+        <h2>Permiss&otilde;es</h2>
+        <p>A extens&atilde;o solicita as seguintes permiss&otilde;es no navegador:</p>
+        <ul>
+          <li><strong>storage</strong> &mdash; Para salvar prefer&ecirc;ncias do usu&aacute;rio (tema, favoritos, chave de licen&ccedil;a).</li>
+          <li><strong>alarms</strong> &mdash; Para atualizar dados em segundo plano a cada 60 minutos.</li>
+        </ul>
+        <p>Nenhuma dessas permiss&otilde;es &eacute; usada para acessar dados de navega&ccedil;&atilde;o ou informa&ccedil;&otilde;es pessoais.</p>
+
+        <h2>Reten&ccedil;&atilde;o e Exclus&atilde;o</h2>
+        <p>Nenhum dado pessoal &eacute; retido em servidores. As prefer&ecirc;ncias armazenadas localmente podem ser removidas pelo usu&aacute;rio a qualquer momento atrav&eacute;s do gerenciamento de extens&otilde;es do Chrome (Remover) ou limpando os dados de navega&ccedil;&atilde;o.</p>
+
+        <h2>Altera&ccedil;&otilde;es</h2>
+        <p>Esta pol&iacute;tica pode ser atualizada periodicamente. A data da &uacute;ltima atualiza&ccedil;&atilde;o est&aacute; indicada no topo da p&aacute;gina.</p>
+
+        <h2>Contato</h2>
+        <p>Para quest&otilde;es relacionadas a esta pol&iacute;tica de privacidade, entre em contato atrav&eacute;s do site:<br><a href="https://www.operatrader.com.br" target="_blank" rel="noopener">https://www.operatrader.com.br</a></p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================
+       FOOTER
+       ============================================ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__inner">
+        <div class="footer__top">
+          <div class="footer__brand">
+            <svg class="footer__logo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+              <path d="M144 32a80 80 0 1 0 0 160 80 80 0 0 0 0-160Zm0 130a50 50 0 1 1 0-100 50 50 0 0 1 0 100Z" fill="currentColor"/>
+              <path d="M144 62v42l30 20" stroke="var(--color-bronze)" stroke-width="20" stroke-linecap="round" fill="none"/>
+              <path d="M78 208h306a12 12 0 0 1 12 12v168a86 86 0 0 1-86 86H152a86 86 0 0 1-86-86V220a12 12 0 0 1 12-12Z" class="cup-body" stroke="currentColor" stroke-width="22"/>
+              <path d="M40 442h380a10 10 0 0 1 10 10 62 62 0 0 1-62 62H92a62 62 0 0 1-62-62 10 10 0 0 1 10-10Z" fill="currentColor"/>
+            </svg>
+            <span class="footer__name">Opera Morning Call</span>
+          </div>
+
+          <ul class="footer__links">
+            <li><a class="footer__link" href="index.html#rotina">Como funciona</a></li>
+            <li><a class="footer__link" href="index.html#instalar" data-track="install" data-location="footer">Instalar</a></li>
+            <li><a class="footer__link" href="https://www.operatrader.com.br" target="_blank" rel="noopener">Opera Trader</a></li>
+            <li><a class="footer__link" href="privacidade.html">Pol&iacute;tica de Privacidade</a></li>
+            <li><a class="footer__link" href="#">Termos de Uso</a></li>
+            <li><a class="footer__link" href="#">Contato</a></li>
+          </ul>
+        </div>
+
+        <p class="footer__disclaimer">
+          O Opera Morning Call &eacute; uma ferramenta de conte&uacute;do informativo e educacional.
+          N&atilde;o fornece recomenda&ccedil;&otilde;es de investimento, consultoria financeira ou an&aacute;lise individualizada de ativos.
+          Investimentos em renda vari&aacute;vel e derivativos envolvem riscos, incluindo a possibilidade de perdas financeiras.
+          Resultados passados n&atilde;o garantem resultados futuros.
+        </p>
+
+        <div class="footer__bottom">
+          <span class="footer__copy">&copy; 2026 Opera Trader System. Todos os direitos reservados.</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- JS -->
+  <script src="js/main.js" defer></script>
+</body>
+</html>

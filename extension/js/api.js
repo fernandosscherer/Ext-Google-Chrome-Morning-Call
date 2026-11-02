@@ -1,394 +1,258 @@
-const USE_MOCK = false
+import { getCache, setCache, CACHE_CONFIG } from './cache.js'
+import { resolveCurrentContract, getResolvedSymbol } from './b3.js'
 
-const BRAPI_BASE = 'https://brapi.dev/api/v2/futures'
-const BRAPI_TOKEN = 'o4MLheSdTFEL2ogBViwpSq'
-const MARKETAUX_BASE = 'https://api.marketaux.com'
-const MARKETAUX_TOKEN = '90tD0ZEkEwtAe6gPNIm4nhYECulBvk1JoZenQKYe'
+const API_BASE = 'https://opera-proxy.datamapleai.workers.dev/api/v1'
 
-const CACHE_TTL = {
-  quote: 60 * 1000,
+const SYMBOL_RE = /^[A-Z0-9]{2,12}$/
+function isValidSymbol(symbol) {
+  return typeof symbol === 'string' && SYMBOL_RE.test(symbol)
 }
 
-/* ─── Cache helpers ─── */
+/* ─── Mock flag (debug only) ───
+   Default: false. A extensão sempre tenta o backend real.
+   Pra dev local sem backend, setar via console:
+     chrome.storage.local.set({ useMock: true }) e recarregar
+   Ou clicar no chip "MOCK" no header da extensão.
+*/
 
-async function getCache(key) {
+async function getUseMock() {
   try {
-    const result = await chrome.storage.local.get(key)
-    const entry = result[key]
-    if (!entry || !entry.data) return null
-    if (Date.now() - entry.timestamp > entry.ttl) return null
-    return entry.data
-  } catch {
+    const r = await chrome.storage.local.get('useMock')
+    return !!r.useMock
+  } catch { return false }
+}
+
+async function setUseMock(v) {
+  try { await chrome.storage.local.set({ useMock: !!v }) } catch {}
+}
+
+/* ─── Contract resolution ───
+   A lógica de B3 (vencimentos + data BRT) vive em b3.js — fonte única.
+   Reexportada abaixo para manter compatibilidade dos imports da UI. */
+
+/* ─── Asset list ─── */
+
+const ASSET_LIST = [
+  { base: 'WIN', name: 'Mini \u00cdndice', category: 'indice_futuro' },
+  { base: 'WDO', name: 'Mini D\u00f3lar', category: 'dolar_futuro' },
+]
+
+/* ─── Mock data (fallback only — usar quando backend não responde) ─── */
+
+const MOCK = {
+  watchlist: [
+    { symbol: 'WINQ26', name: 'Mini \u00cdndice', price: 180515, changePercent: 3.12, lastClose: 175050 },
+    { symbol: 'WDON26', name: 'Mini D\u00f3lar', price: 5680, changePercent: -0.45, lastClose: 5705.5 },
+  ],
+  quote: {
+    symbol: 'WINQ26', name: 'Mini \u00cdndice', price: 180515, changePercent: 3.12,
+    change: 5465, isMarketOpen: false, lastClose: 175050, lastUpdated: '2026-07-10T21:00:00.000Z',
+  },
+  termStructures: {
+    WIN: [
+      { contract: 'WINQ26', iv: 31.8, expiration: '2026-08-12', isCurrent: true },
+      { contract: 'WINU26', iv: 29.4, expiration: '2026-09-09', isCurrent: false },
+      { contract: 'WINV26', iv: 27.1, expiration: '2026-10-14', isCurrent: false },
+      { contract: 'WINX26', iv: 25.8, expiration: '2026-11-11', isCurrent: false },
+      { contract: 'WINZ26', iv: 24.2, expiration: '2026-12-09', isCurrent: false },
+    ],
+    WDO: [
+      { contract: 'WDON26', iv: 20.1, expiration: '2026-07-16', isCurrent: true },
+      { contract: 'WDOQ26', iv: 19.4, expiration: '2026-08-03', isCurrent: false },
+      { contract: 'WDOU26', iv: 18.7, expiration: '2026-09-01', isCurrent: false },
+      { contract: 'WDOV26', iv: 18.2, expiration: '2026-10-01', isCurrent: false },
+      { contract: 'WDOX26', iv: 17.6, expiration: '2026-11-02', isCurrent: false },
+    ],
+  },
+  macro: {
+    selic: 14.25,
+    ipca12m: 4.64,
+    cdi: 14.15,
+    asOf: '2026-07-10',
+  },
+  ivPercentile: 84,
+  news: [
+    { title: 'Fed mant\u00e9m juros e sinaliza cortes no segundo semestre', source: 'Reuters', timeAgo: '2h atr\u00e1s', url: '#' },
+    { title: 'Petr\u00f3leo opera em alta com tens\u00f5es geopol\u00edticas no Oriente M\u00e9dio', source: 'Bloomberg', timeAgo: '3h atr\u00e1s', url: '#' },
+    { title: 'China anuncia pacote de est\u00edmulo fiscal para impulsionar economia', source: 'Valor Econ\u00f4mico', timeAgo: '4h atr\u00e1s', url: '#' },
+  ],
+  calendarEvents: [
+    { event: 'Payroll (EUA)', time: '09:30', impact: 3, country: 'US' },
+    { event: 'Taxa Selic (Copom)', time: '18:30', impact: 3, country: 'BR' },
+  ],
+  license: { valid: false, tier: 'free', message: 'Chave inv\u00e1lida ou expirada.' },
+}
+
+/* ─── HTTP wrapper (com fallback mock em runtime) ─── */
+
+async function http(path, opts = {}) {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...opts,
+      headers: { 'Accept': 'application/json', ...(opts.headers || {}) },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch (e) {
+    if (await getUseMock()) {
+      return { __mock: true, __error: e.message }
+    }
+    throw e
+  }
+}
+
+/* ─── API fetch functions (proxy-backed) ─── */
+
+async function fetchWatchlist(force = false) {
+  if (await getUseMock()) return [...MOCK.watchlist]
+  const cached = await getCache('watchlist', force)
+  if (cached) return cached
+  try {
+    const data = await http('/watchlist?symbols=WIN,WDO')
+    if (data && data.length) await setCache('watchlist', data, CACHE_CONFIG.watchlist.ttl, CACHE_CONFIG.watchlist.afterClose)
+    return data || []
+  } catch { return [] }
+}
+
+async function fetchQuote(symbol, force = false) {
+  if (!isValidSymbol(symbol)) return null
+  if (await getUseMock()) return { ...MOCK.quote, symbol: symbol || MOCK.quote.symbol }
+  const cached = await getCache(`quote_${symbol}`, force)
+  if (cached) return cached
+  try {
+    const data = await http(`/quote?symbol=${encodeURIComponent(symbol)}`)
+    if (data) await setCache(`quote_${symbol}`, data, CACHE_CONFIG.quote.ttl, CACHE_CONFIG.quote.afterClose)
+    return data
+  } catch (e) {
+    console.error('fetchQuote error:', e)
     return null
   }
 }
 
-async function setCache(key, data, ttl) {
-  try {
-    await chrome.storage.local.set({
-      [key]: { data, timestamp: Date.now(), ttl },
-    })
-  } catch {
-    // storage full or unavailable
+async function fetchTermStructure(symbol, force = false) {
+  const base = symbol?.match(/^(WIN|WDO)/)?.[1] || 'WIN'
+  if (await getUseMock()) {
+    const data = MOCK.termStructures[base]
+    return data ? data.map(c => ({ ...c })) : []
   }
-}
-
-/* ─── Contract resolution (B3 futures) ─── */
-
-const MONTH_CODES = ['F','G','H','J','K','M','N','Q','U','V','X','Z']
-const WIN_IND_MONTHS = ['G','J','M','Q','V','Z']
-
-function resolveCurrentContract(baseSymbol) {
-  const now = new Date()
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear() % 100
-  const validMonths = ['WIN', 'IND'].includes(baseSymbol) ? WIN_IND_MONTHS : MONTH_CODES
-
-  let targetMonth = currentMonth
-  for (let i = 0; i < 12; i++) {
-    const m = (currentMonth + i) % 12
-    const code = MONTH_CODES[m]
-    if (validMonths.includes(code)) {
-      targetMonth = m
-      break
-    }
-  }
-
-  const code = MONTH_CODES[targetMonth]
-  const year = targetMonth < currentMonth ? currentYear + 1 : currentYear
-  return `${baseSymbol}${code}${year}`
-}
-
-/* ─── Week calendar generator ─── */
-
-const CALENDAR_EVENTS = [
-  { country: 'US', event: 'Payroll (EUA)', time: '09:30', impact: 3 },
-  { country: 'US', event: 'Taxa de Desemprego', time: '09:30', impact: 3 },
-  { country: 'US', event: 'ISM Manufacturing', time: '10:45', impact: 2 },
-  { country: 'US', event: 'Jobless Claims', time: '09:30', impact: 2 },
-  { country: 'US', event: 'Produ\u00e7\u00e3o Industrial', time: '10:15', impact: 2 },
-  { country: 'US', event: 'Confian\u00e7a do Consumidor', time: '11:00', impact: 2 },
-  { country: 'US', event: 'Fed Minutes', time: '15:00', impact: 3 },
-  { country: 'US', event: 'PIB (anualizado)', time: '09:30', impact: 3 },
-  { country: 'US', event: 'Vendas no Varejo', time: '09:30', impact: 2 },
-  { country: 'BR', event: 'IPC-FIPE', time: '08:00', impact: 2 },
-  { country: 'BR', event: 'IPCA-15', time: '09:00', impact: 3 },
-  { country: 'BR', event: 'Taxa Selic (Copom)', time: '18:30', impact: 3 },
-  { country: 'BR', event: 'PNAD Cont\u00ednua', time: '09:00', impact: 2 },
-  { country: 'BR', event: 'Produ\u00e7\u00e3o Industrial', time: '09:00', impact: 2 },
-  { country: 'BR', event: 'Balan\u00e7a Comercial', time: '15:00', impact: 2 },
-  { country: 'CN', event: 'CPI China', time: '22:30', impact: 2 },
-  { country: 'CN', event: 'PIB China', time: '23:00', impact: 3 },
-  { country: 'DE', event: 'IFO Alem\u00e3o', time: '05:00', impact: 2 },
-  { country: 'UK', event: 'CPI Reino Unido', time: '08:00', impact: 2 },
-  { country: 'JP', event: 'Taxa de Juros (BOJ)', time: '00:30', impact: 3 },
-  { country: 'JP', event: 'Confian\u00e7a Industrial (Tankan)', time: '01:50', impact: 2 },
-  { country: 'DE', event: 'ZEW Alem\u00e3o', time: '06:00', impact: 2 },
-  { country: 'US', event: 'API Weekly Crude Stocks', time: '17:30', impact: 2 },
-  { country: 'US', event: 'EIA Crude Stocks', time: '11:30', impact: 2 },
-]
-
-function getWeekDays() {
-  const now = new Date()
-  const day = now.getDay()
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - ((day + 6) % 7))
-  const days = []
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    days.push(d)
-  }
-  return days
-}
-
-const DAY_LABELS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'S\u00C1B']
-
-function generateWeekCalendar() {
-  const days = getWeekDays()
-  const events = []
-
-  days.forEach((date, dayIdx) => {
-    const dateStr = date.toISOString().split('T')[0]
-    const dayName = DAY_LABELS[date.getDay()]
-
-    const add = [
-      { country: 'BR', max: 0.7 },
-      { country: 'US', max: 0.9 },
-      { country: 'CN', max: 0.3 },
-      { country: 'DE', max: 0.2 },
-      { country: 'UK', max: 0.2 },
-      { country: 'JP', max: 0.15 },
-    ]
-
-    add.forEach(({ country, max }) => {
-      if (Math.random() < max) {
-        const pool = CALENDAR_EVENTS.filter(e => e.country === country)
-        if (pool.length) {
-          const pick = pool[Math.floor(Math.random() * pool.length)]
-          events.push({
-            ...pick,
-            date: dateStr,
-            dayLabel: dayName,
-            time: dayIdx === 3 && country === 'US' ? '09:30' : pick.time,
-          })
-        }
-      }
-    })
-  })
-
-  return events.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
-}
-
-/* ─── Mock data ─── */
-
-const MOCK = {
-  quote: {
-    symbol: 'WINQ26',
-    name: 'Ibovespa Mini',
-    price: 128765,
-    changePercent: 0.42,
-    change: 542,
-    isMarketOpen: true,
-    lastClose: 128223,
-    lastUpdated: new Date().toISOString(),
-  },
-  marketScore: {
-    score: 45,
-    label: 'MODERADO',
-    segment: 1,
-    factors: {
-      eventsImpact: 15,
-      vix: 10,
-      gapFutures: 8,
-      realizedVol: 12,
-    },
-  },
-  calendar: generateWeekCalendar(),
-  news: [
-    {
-      title: 'Fed mant\u00e9m juros e sinaliza cortes no segundo semestre',
-      source: 'Reuters',
-      timeAgo: '2h atr\u00e1s',
-      url: 'https://news.google.com/search?q=Fed+juros+cortes+2026&hl=pt-BR',
-    },
-    {
-      title: 'Petr\u00f3leo opera em alta com tens\u00f5es geopol\u00edticas no Oriente M\u00e9dio',
-      source: 'Bloomberg',
-      timeAgo: '3h atr\u00e1s',
-      url: 'https://news.google.com/search?q=petr%C3%B3leo+geopol%C3%ADtica+Oriente+M%C3%A9dio&hl=pt-BR',
-    },
-    {
-      title: 'China anuncia pacote de est\u00edmulo fiscal para impulsionar economia',
-      source: 'Valor Econ\u00f4mico',
-      timeAgo: '4h atr\u00e1s',
-      url: 'https://news.google.com/search?q=China+est%C3%ADmulo+fiscal+economia&hl=pt-BR',
-    },
-  ],
-  licenseValidation: {
-    valid: false,
-    tier: 'free',
-    message: 'Chave inv\u00e1lida ou expirada.',
-  },
-}
-
-/* ─── Sentiment analysis helpers ─── */
-
-const SENTIMENT_BEARISH = ['tens\u00e3o', 'tarifa', 'infla\u00e7\u00e3o', 'corte', 'risco', 'queda', 'desacelera']
-const SENTIMENT_BULLISH = ['est\u00edmulo', 'pacote', 'alta', 'crescimento', 'impulsionar', 'acordo', 'recupera']
-
-function computeNewsSentiment(news) {
-  let bearishScore = 0
-  let bullishScore = 0
-
-  const hasEntitySentiment = (news || []).some(n => n.entities && n.entities.length > 0)
-
-  if (hasEntitySentiment) {
-    ;(news || []).forEach(n => {
-      const entities = n.entities || []
-      if (entities.length === 0) return
-      const avg = entities.reduce((s, e) => s + (e.sentiment_score || 0), 0) / entities.length
-      if (avg > 0.15) bullishScore++
-      else if (avg < -0.15) bearishScore++
-    })
-  } else {
-    ;(news || []).forEach(n => {
-      const t = (n.title || '').toLowerCase()
-      SENTIMENT_BEARISH.forEach(k => { if (t.includes(k)) bearishScore++ })
-      SENTIMENT_BULLISH.forEach(k => { if (t.includes(k)) bullishScore++ })
-    })
-  }
-
-  return { bearishScore, bullishScore }
-}
-
-/* ─── Dynamic analyst note generator ─── */
-
-function generateAnalystNote(events, news) {
-  const lines = []
-
-  const highImpact = (events || []).filter(e => e.impact >= 3)
-  if (highImpact.length > 0) {
-    lines.push('Alto impacto hoje:')
-    highImpact.forEach(e => lines.push(`  ${e.event} (${e.time})`))
-    lines.push('N\u00e3o opere 30 min antes e depois de cada evento.')
-  }
-
-  const { bearishScore, bullishScore } = computeNewsSentiment(news)
-
-  if (bearishScore > bullishScore) {
-    lines.push('Not\u00edcias sugerem cautela no curto prazo.')
-  } else if (bullishScore > bearishScore) {
-    lines.push('Not\u00edcias com vi\u00e9s positivo hoje.')
-  } else {
-    lines.push('Not\u00edcias neutras \u2014 sem vi\u00e9s claro.')
-  }
-
-  if (highImpact.length > 0) {
-    lines.push('Reduza exposi\u00e7\u00e3o ou aguarde confirma\u00e7\u00e3o dos dados.')
-  } else {
-    lines.push('Opere conforme seu plano \u2014 sem eventos de alto impacto.')
-  }
-
-  return lines.join('\n')
-}
-
-/* ─── Volatility computation (events + news) ─── */
-
-function computeVolatilitySegment(events, news) {
-  let score = 30
-
-  const highImpact = (events || []).filter(e => e.impact >= 3).length
-  const medImpact = (events || []).filter(e => e.impact === 2).length
-  score += highImpact * 18
-  score += medImpact * 4
-
-  const { bearishScore, bullishScore } = computeNewsSentiment(news)
-  score += (bearishScore - bullishScore) * 10
-
-  score = Math.max(0, Math.min(100, score))
-  const segment = score <= 25 ? 0 : score <= 50 ? 1 : score <= 75 ? 2 : 3
-
-  return { score, segment }
-}
-
-const COUNTRY_FLAG = {
-  US: '\u{1F1FA}\u{1F1F8}',
-  CN: '\u{1F1E8}\u{1F1F3}',
-  BR: '\u{1F1E7}\u{1F1F7}',
-  DE: '\u{1F1E9}\u{1F1EA}',
-  UK: '\u{1F1EC}\u{1F1E7}',
-  JP: '\u{1F1EF}\u{1F1F5}',
-}
-
-/* ─── B3 asset base list (no hardcoded expiry) ─── */
-
-const ASSET_LIST = [
-  { base: 'WIN', name: 'Mini \u00cdndice', category: 'indice_futuro' },
-  { base: 'IND', name: '\u00cdndice Futuro (cheio)', category: 'indice_futuro' },
-  { base: 'WDO', name: 'Mini D\u00f3lar', category: 'dolar_futuro' },
-  { base: 'DOL', name: 'D\u00f3lar Futuro (cheio)', category: 'dolar_futuro' },
-]
-
-/* ─── API fetch functions ─── */
-
-async function fetchQuote(symbol) {
-  if (USE_MOCK) return { ...MOCK.quote, symbol: symbol || MOCK.quote.symbol }
-  const cached = await getCache(`quote_${symbol}`)
+  const cached = await getCache(`term_${base}`, force)
   if (cached) return cached
   try {
-    const res = await fetch(`${BRAPI_BASE}/quote?symbols=${symbol}&token=${BRAPI_TOKEN}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const body = await res.json()
-    const q = body.quotes?.[0]
-    if (!q) throw new Error('empty response')
-    const data = {
-      symbol: q.symbol,
-      name: q.assetDescription || symbol,
-      price: q.close ?? q.settlement,
-      changePercent: q.oscillationPct ?? 0,
-      change: q.close && q.settlement ? q.close - q.settlement : 0,
-      isMarketOpen: !!q.close,
-      lastClose: q.settlement || q.close,
-      lastUpdated: new Date(q.date * 1000 || Date.now()).toISOString(),
-    }
-    await setCache(`quote_${symbol}`, data, CACHE_TTL.quote)
-    return data
-  } catch {
-    return { ...MOCK.quote, symbol: symbol || MOCK.quote.symbol }
-  }
+    const data = await http(`/term-structure?symbol=${base}`)
+    if (data && data.length) await setCache(`term_${base}`, data, CACHE_CONFIG.term.ttl, CACHE_CONFIG.term.afterClose)
+    return data || []
+  } catch { return [] }
 }
 
-async function fetchCalendar() {
-  return [...MOCK.calendar]
-}
-
-async function fetchNews() {
-  if (USE_MOCK) return [...MOCK.news]
+async function fetchIVPercentile(symbol) {
+  if (await getUseMock()) return MOCK.ivPercentile
+  const base = symbol?.match(/^(WIN|WDO)/)?.[1] || 'WIN'
+  const cacheKey = `term_${base}_pct`
+  const cached = await getCache(cacheKey)
+  if (cached != null) return cached
   try {
-    const res = await fetch(
-      `${MARKETAUX_BASE}/v1/news/all?` +
-      `countries=br&language=pt&` +
-      `filter_entities=true&must_have_entities=true&` +
-      `limit=5&api_token=${MARKETAUX_TOKEN}`
-    )
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const body = await res.json()
-    return (body.data || []).map(article => ({
-      title: article.title,
-      source: article.source,
-      timeAgo: timeAgo(article.published_at),
-      url: article.url,
-      entities: article.entities || [],
-    }))
-  } catch {
-    return [...MOCK.news]
-  }
+    const data = await http(`/term-structure?symbol=${encodeURIComponent(symbol)}&percentile=true`)
+    const pct = data?.percentile ?? null
+    if (pct != null) await setCache(cacheKey, pct, CACHE_CONFIG.term.ttl, CACHE_CONFIG.term.afterClose)
+    return pct
+  } catch { return null }
 }
 
-async function fetchMarketScore() {
-  return { ...MOCK.marketScore }
+async function fetchMacro(force = false) {
+  if (await getUseMock()) return { ...MOCK.macro }
+  const cached = await getCache('macro', force)
+  if (cached) return cached
+  try {
+    const data = await http('/macro')
+    if (data) await setCache('macro', data, CACHE_CONFIG.macro.ttl, CACHE_CONFIG.macro.afterClose)
+    return data
+  } catch { return null }
+}
+
+async function fetchNews(force = false) {
+  if (await getUseMock()) return [...MOCK.news]
+  const cached = await getCache('news', force)
+  if (cached) return cached
+  try {
+    const data = await http('/news?limit=3')
+    if (data && data.length) await setCache('news', data, CACHE_CONFIG.news.ttl, CACHE_CONFIG.news.afterClose)
+    return data || []
+  } catch { return [] }
+}
+
+async function fetchCalendar(force = false) {
+  if (await getUseMock()) return [...MOCK.calendarEvents]
+  const cached = await getCache('calendar', force)
+  if (cached) return cached
+  try {
+    const data = await http('/calendar')
+    if (data) await setCache('calendar', data, CACHE_CONFIG.calendar.ttl, CACHE_CONFIG.calendar.afterClose)
+    return data || []
+  } catch { return [] }
 }
 
 async function validateLicense(key) {
-  const valid = key === 'FOUNDER-2026'
-  return { valid, tier: valid ? 'founder' : 'free', message: valid ? 'Licen\u00e7a ativa.' : 'Chave inv\u00e1lida.' }
+  if (await getUseMock()) {
+    return { valid: false, tier: 'free', message: 'Licen\u00e7a indispon\u00edvel no modo mock.' }
+  }
+  try {
+    return await http('/license/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    })
+  } catch { return { valid: false, tier: 'free', message: 'Erro de conex\u00e3o.' } }
 }
 
-/* ─── Time helpers ─── */
+/* ─── Health check (pra UI mostrar chip "MOCK" quando offline) ─── */
 
-function formatCacheTime(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+async function ping() {
+  try {
+    const result = await http('/health', { method: 'GET' })
+    if (result?.__mock) return { ok: false, mock: true, reason: result.__error }
+    return { ok: true, mock: false }
+  } catch (e) {
+    if (await getUseMock()) return { ok: false, mock: true, reason: e.message }
+    return { ok: false, mock: false, reason: e.message }
+  }
 }
 
-function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'agora'
-  if (mins < 60) return `${mins}min atr\u00e1s`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h atr\u00e1s`
-  const days = Math.floor(hours / 24)
-  return `${days}d atr\u00e1s`
+/* ─── Analyst note generator ─── */
+
+function generateAnalystNote(events, ivPercentile) {
+  const lines = []
+  const highImpact = (events || []).filter(e => e.impact >= 3)
+  if (highImpact.length > 0) {
+    lines.push('Eventos de alto impacto estimados:')
+    highImpact.forEach(e => lines.push(`  ${e.event} (${e.time})`))
+    lines.push('Confirme os horários no calendário oficial antes de operar.')
+  }
+  if (ivPercentile != null) {
+    const level = ivPercentile > 80 ? 'alta' : ivPercentile > 50 ? 'moderada' : 'baixa'
+    lines.push(`Volatilidade estimada em nível ${level} (referência ${ivPercentile}).`)
+  }
+  if (highImpact.length === 0) lines.push('Sem eventos de alto impacto estimados para hoje.')
+  lines.push('Dados estimados — não constitui recomendação.')
+  return lines.join('\n')
 }
+
+/* ─── Exports ─── */
 
 export {
-  USE_MOCK,
-  MARKETAUX_TOKEN,
+  API_BASE,
   ASSET_LIST,
-  COUNTRY_FLAG,
-  CACHE_TTL,
-  getCache,
-  setCache,
   resolveCurrentContract,
+  getResolvedSymbol,
+  fetchWatchlist,
   fetchQuote,
-  fetchCalendar,
+  fetchTermStructure,
+  fetchIVPercentile,
+  fetchMacro,
   fetchNews,
-  fetchMarketScore,
+  fetchCalendar,
   validateLicense,
-  formatCacheTime,
+  ping,
+  getUseMock,
+  setUseMock,
   generateAnalystNote,
-  computeVolatilitySegment,
 }

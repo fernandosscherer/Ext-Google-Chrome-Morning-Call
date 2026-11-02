@@ -1,0 +1,36 @@
+:root {
+  --font-heading: 'Newsreader', 'Georgia', 'Times New Roman', serif;
+  --font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-data: 'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace;
+
+  --color-petrol: #00A7B5;
+  --color-bronze: #D79A32;
+  --color-success: #37D67A;
+  --color-warning: #D79A32;
+  --color-danger: #D85A4B;
+}
+
+[data-theme="dark"] {
+  --color-canvas: #02080B;
+  --color-surface: #071A20;
+  --color-surface-soft: #0D252B;
+  --color-border: #17363D;
+  --color-heading: #F2EFE7;
+  --color-text: #C9D0CD;
+  --color-muted: #778987;
+}
+
+[data-theme="light"] {
+  --color-canvas: #F4F3EF;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #FAFAF7;
+  --color-border: #DDD9CF;
+  --color-heading: #111820;
+  --color-text: #3F474C;
+  --color-muted: #747B78;
+  --color-petrol: #123F48;
+  --color-bronze: #A77A38;
+  --color-success: #267451;
+  --color-warning: #B68A35;
+  --color-danger: #9B3A32;
+}

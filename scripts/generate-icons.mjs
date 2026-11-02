@@ -4,7 +4,7 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const OUT = resolve(__dirname, '..', 'public', 'icons')
+const OUT = resolve(__dirname, '..', 'extension', 'icons')
 
 function crc32(buf) {
   let crc = 0xffffffff
@@ -63,7 +63,7 @@ mkdirSync(OUT, { recursive: true })
 
 const petrol = [0x12, 0x3F, 0x48]
 
-for (const size of [16, 48, 128]) {
-  writeFileSync(resolve(OUT, `icon-${size}.png`), createPNG(size, ...petrol))
-  console.log(`Generated icon-${size}.png`)
+for (const size of [16, 32, 48, 128]) {
+  writeFileSync(resolve(OUT, `${size}.png`), createPNG(size, ...petrol))
+  console.log(`Generated ${size}.png`)
 }

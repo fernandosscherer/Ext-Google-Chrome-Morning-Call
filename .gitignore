@@ -1,3 +1,10 @@
 .opencode/
 .DS_Store
 node_modules/
+
+# Build artifacts
+*.crx
+*.pem
+*.zip
+opera-morning-call-*/
+dist/
