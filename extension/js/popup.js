@@ -1,6 +1,6 @@
 import {
   ASSET_LIST,
-  fetchWatchlist, fetchQuote, fetchTermStructure,
+  fetchQuote, fetchTermStructure,
   fetchMacro, fetchNews, fetchCalendar,
   validateLicense, ping, getUseMock, setUseMock,
   resolveCurrentContract,
@@ -80,7 +80,6 @@ const state = {
   licenseTier: 'free',
   licenseKey: '',
   data: {
-    watchlist: null,
     calendar: null,
     macro: null,
     termWIN: null,
@@ -192,70 +191,6 @@ function renderHeader() {
 /* ─── Pairs (WIN / WDO) ─── */
 function assetName(base) {
   return ASSET_LIST.find(a => a.base === base)?.name || base
-}
-
-function currentPair(base) {
-  const res = state.data.watchlist
-  if (!res) return { kind: 'loading' }
-  if (res.status === 'error') return { kind: 'error', res }
-  const list = Array.isArray(res.data) ? res.data : []
-  const item = list.find(q => baseOf(q.symbol) === base)
-  if (!item) return { kind: 'empty', res }
-  return { kind: 'ok', res, item }
-}
-
-function renderPairs() {
-  return `<div class="pairs">${renderPair('WIN')}${renderPair('WDO')}</div>`
-}
-
-function renderPair(base) {
-  const name = assetName(base)
-  const p = currentPair(base)
-
-  if (p.kind === 'loading') {
-    return `<div class="skeleton skeleton--pair" role="status" aria-label="Carregando ${esc(base)}"></div>`
-  }
-
-  if (p.kind === 'error' || p.kind === 'empty') {
-    const desc = p.kind === 'error' ? 'Falha ao carregar' : 'Sem cota\u00e7\u00e3o'
-    return `
-      <button class="pair pair--error" data-action="retry-watchlist" aria-label="${esc(base)} indispon\u00edvel. Tentar novamente">
-        <span class="pair__ticker">${esc(base)}</span>
-        <span class="pair__error-title">Indispon\u00edvel</span>
-        <span class="pair__error-desc">${esc(desc)} \u00b7 tentar novamente</span>
-      </button>
-    `
-  }
-
-  const { res, item } = p
-  const change = formatChange(item.changePercent)
-  const price = item.price ?? item.lastClose
-  const type = priceTypeLabel(item.priceType)
-  const asOf = formatDateTime(item.lastUpdated)
-  const stale = res.status === 'stale'
-  const prevClose = item.lastClose != null && item.lastClose !== price
-    ? `<span class="pair__prev">Fech. anterior ${formatPrice(item.lastClose, base)}</span>`
-    : ''
-  const statusText = stale
-    ? `<span class="pair__meta">${asOf ? esc(asOf) + ' \u00b7 ' : ''}<span class="muted">Desatualizado</span></span>`
-    : `<span class="pair__meta">${asOf ? esc(asOf) : '&nbsp;'}</span>`
-
-  return `
-    <button class="pair" data-action="select-symbol" data-symbol="${esc(item.symbol)}"
-            aria-label="${esc(base)} ${esc(name)}, contrato ${esc(item.symbol)}, pre\u00e7o ${esc(formatPrice(price, base))}, varia\u00e7\u00e3o ${esc(change.text)}">
-      <span class="pair__top">
-        <span class="pair__name">${esc(base)} \u00b7 ${esc(name)}</span>
-        <span class="pair__ticker">${esc(item.symbol)}</span>
-      </span>
-      <span class="pair__price">${esc(formatPrice(price, base))}</span>
-      <span class="pair__row">
-        <span class="pair__type">${esc(type)}</span>
-        <span class="pair__change pair__change--${change.tone}">${esc(change.text)}</span>
-      </span>
-      ${prevClose}
-      ${statusText}
-    </button>
-  `
 }
 
 /* ─── Agenda ─── */
@@ -658,7 +593,6 @@ function renderFooter() {
 function renderMain() {
   return `
     ${renderHeader()}
-    ${renderPairs()}
     ${renderAgenda()}
     ${renderMacro()}
     ${renderTerm()}
@@ -744,9 +678,8 @@ async function loadAll({ force = false } = {}) {
   if (force) state.refreshing = true
   scheduleRender()
 
-  const [health, watchlist, calendar, macro, termWIN, termWDO, news] = await Promise.all([
+  const [health, calendar, macro, termWIN, termWDO, news] = await Promise.all([
     ping(),
-    fetchWatchlist(force),
     fetchCalendar(force),
     fetchMacro(force),
     fetchTermStructure('WIN', force),
@@ -756,7 +689,6 @@ async function loadAll({ force = false } = {}) {
   if (seq !== refreshSeq) return
 
   state.backend = { ok: health.ok, checked: true, error: health.error || null }
-  state.data.watchlist = watchlist
   state.data.calendar = calendar
   state.data.macro = macro
   state.data.termWIN = termWIN
@@ -799,12 +731,6 @@ async function loadDetail(symbol, { force = false } = {}) {
 }
 
 /* ─── Per-block retries (só a consulta correspondente) ─── */
-async function retryWatchlist() {
-  const res = await fetchWatchlist(true)
-  state.data.watchlist = res
-  reconcileSelection()
-  scheduleRender()
-}
 async function retryCalendar() {
   state.data.calendar = await fetchCalendar(true)
   scheduleRender()
@@ -843,7 +769,7 @@ async function toggleDemo() {
   await setUseMock(next)
   state.useMock = next
   /* Isola dados reais de simulados */
-  state.data = { watchlist: null, calendar: null, macro: null, termWIN: null, termWDO: null, news: null, quote: null }
+  state.data = { calendar: null, macro: null, termWIN: null, termWDO: null, news: null, quote: null }
   state.booting = true
   await loadAll({ force: true })
 }
@@ -881,7 +807,6 @@ function bindEvents() {
       selectSymbol(sym)
       return
     }
-    if (action === 'retry-watchlist') { retryWatchlist(); return }
     if (action === 'retry-calendar') { retryCalendar(); return }
     if (action === 'retry-macro') { retryMacro(); return }
     if (action === 'retry-term') { retryTerm(); return }
