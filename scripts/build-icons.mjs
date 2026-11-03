@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const SRC = path.resolve(__dirname, '..', 'extension', 'icons', 'logo-morningcall.png')
+const SRC = path.resolve(__dirname, '..', 'assets', 'logo-morningcall.png')
 const OUT = path.resolve(__dirname, '..', 'extension', 'icons')
 const SIZES = [16, 32, 48, 128]
 
@@ -241,3 +241,7 @@ for (const size of SIZES) {
   fs.writeFileSync(path.join(OUT, `${size}.png`), png)
   console.log(`Generated ${size}.png (inner ${dstW}x${dstH}, radius ${radius})`)
 }
+
+/* Keep the runtime copy in the extension in sync with the source asset. */
+fs.copyFileSync(SRC, path.join(OUT, 'logo-morningcall.png'))
+console.log('Copied logo-morningcall.png to extension/icons')
