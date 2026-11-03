@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Opera Morning Call",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Checklist de pr\u00e9-abertura B3: WIN, WDO, agenda, macro e vencimentos.",
   "action": {
     "default_popup": "popup.html",

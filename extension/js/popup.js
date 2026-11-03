@@ -37,19 +37,7 @@ const Icon = {
   Alert: S('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 15, 15),
 }
 
-const LogoSvg = `
-<svg class="header__logo-svg" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M144 32a80 80 0 1 0 0 160 80 80 0 0 0 0-160Zm0 130a50 50 0 1 1 0-100 50 50 0 0 1 0 100Z" fill="currentColor"/>
-  <path d="M144 62v42l30 20" stroke="#F5C16C" stroke-width="14" stroke-linecap="round" fill="none"/>
-  <path d="M228 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
-  <path d="M298 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
-  <path d="M368 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
-  <path d="M78 208h306a12 12 0 0 1 12 12v168a86 86 0 0 1-86 86H152a86 86 0 0 1-86-86V220a12 12 0 0 1 12-12Z" class="cup-body" stroke="currentColor" stroke-width="16"/>
-  <path d="M396 250h56a44 44 0 0 1 44 44v40a76 76 0 0 1-76 76h-24" fill="none" stroke="currentColor" stroke-width="16"/>
-  <circle cx="330" cy="290" r="9" fill="#F5C16C"/>
-  <rect x="322" y="320" width="16" height="60" rx="8" fill="#F5C16C"/>
-  <path d="M40 442h380a10 10 0 0 1 10 10 62 62 0 0 1-62 62H92a62 62 0 0 1-62-62 10 10 0 0 1 10-10Z" fill="currentColor"/>
-</svg>`
+const LogoSvg = `<img class="header__logo-img" src="icons/logo-morningcall.png" width="38" height="38" alt="" aria-hidden="true">`
 
 /* ─── TradingView Calendar ─── */
 function getCalendarUrl(theme) {
