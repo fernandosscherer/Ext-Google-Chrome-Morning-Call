@@ -54,38 +54,81 @@
   font-display: swap;
 }
 
+/* ─── Design tokens ───
+   Paleta por função. Dark é o padrão (:root); light sobrescreve.
+   Contraste verificado para texto sobre superfícies nos dois temas. */
+
 :root {
   --font-ui: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-data: 'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace;
 
-  --color-petrol: #00A7B5;
-  --color-bronze: #D79A32;
-  --color-success: #37D67A;
-  --color-warning: #D79A32;
-  --color-danger: #D85A4B;
+  /* Espaçamento base 4 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  /* Raios discretos */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Dark (padrão) */
+  --color-canvas: #0C141C;
+  --color-surface: #14222D;
+  --color-surface-soft: #1A2A36;
+  --color-border: #2C3E4C;
+  --color-border-strong: #3A4F60;
+  --color-heading: #F1F5F9;
+  --color-text: #DCE6EE;
+  --color-muted: #A9BBC9;
+
+  --color-brand: #F5C16C;
+  --color-focus: #F5C16C;
+  --color-up: #4ADEA5;
+  --color-down: #FB7D88;
+  --color-flat: #A9BBC9;
+  --color-stale: #FACC6B;
+
+  /* Aliases legados (compatibilidade com nomes antigos) */
+  --color-petrol: var(--color-brand);
+  --color-bronze: var(--color-brand);
+  --color-success: var(--color-up);
+  --color-danger: var(--color-down);
+  --color-warning: var(--color-stale);
 }
 
 [data-theme="dark"] {
-  --color-canvas: #02080B;
-  --color-surface: #071A20;
-  --color-surface-soft: #0D252B;
-  --color-border: #17363D;
-  --color-heading: #F2EFE7;
-  --color-text: #C9D0CD;
-  --color-muted: #778987;
+  --color-canvas: #0C141C;
+  --color-surface: #14222D;
+  --color-surface-soft: #1A2A36;
+  --color-border: #2C3E4C;
+  --color-border-strong: #3A4F60;
+  --color-heading: #F1F5F9;
+  --color-text: #DCE6EE;
+  --color-muted: #A9BBC9;
+  --color-brand: #F5C16C;
+  --color-focus: #F5C16C;
+  --color-up: #4ADEA5;
+  --color-down: #FB7D88;
+  --color-flat: #A9BBC9;
+  --color-stale: #FACC6B;
 }
 
 [data-theme="light"] {
-  --color-canvas: #F4F3EF;
+  --color-canvas: #EEF1F4;
   --color-surface: #FFFFFF;
-  --color-surface-soft: #FAFAF7;
-  --color-border: #DDD9CF;
-  --color-heading: #111820;
-  --color-text: #3F474C;
-  --color-muted: #747B78;
-  --color-petrol: #123F48;
-  --color-bronze: #A77A38;
-  --color-success: #267451;
-  --color-warning: #B68A35;
-  --color-danger: #9B3A32;
+  --color-surface-soft: #F4F7F9;
+  --color-border: #D5DEE6;
+  --color-border-strong: #B9C6D1;
+  --color-heading: #0C141C;
+  --color-text: #23303B;
+  --color-muted: #5A6B78;
+  --color-brand: #8A6112;
+  --color-focus: #8A6112;
+  --color-up: #1B7A54;
+  --color-down: #B23A46;
+  --color-flat: #5A6B78;
+  --color-stale: #8A6508;
 }

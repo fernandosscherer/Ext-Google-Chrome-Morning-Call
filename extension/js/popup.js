@@ -1,13 +1,17 @@
 import {
   ASSET_LIST,
-  fetchWatchlist, fetchQuote, fetchTermStructure, fetchIVPercentile,
-  fetchMacro, fetchNews, fetchCalendar, validateLicense, ping, getUseMock, setUseMock,
-  resolveCurrentContract, getResolvedSymbol,
-  generateAnalystNote,
+  fetchWatchlist, fetchQuote, fetchTermStructure,
+  fetchMacro, fetchNews, fetchCalendar,
+  validateLicense, ping, getUseMock, setUseMock,
+  resolveCurrentContract,
 } from './api.js'
+import {
+  baseOf,
+  formatPrice, formatChange, formatExpiration, formatDateTime,
+  formatEventWhen, pickNextEvent, priceTypeLabel, isHttpsUrl,
+} from './format.js'
 
-/* ─── Escaping (previne XSS em dados vindos do backend) ─── */
-
+/* ─── Escaping (dados externos sempre como texto) ─── */
 function esc(v) {
   return String(v ?? '')
     .replace(/&/g, '&amp;')
@@ -17,47 +21,43 @@ function esc(v) {
     .replace(/'/g, '&#39;')
 }
 
-/* ─── Icons (Lucide, stroke 1.5) ─── */
-
+/* ─── Ícones (Lucide, stroke 1.5) ─── */
 const S = (d, w = 18, h = 18) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`
 
 const Icon = {
   Sun: S('<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'),
   Moon: S('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
   Settings: S('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
-  Star: S('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>', 18, 18),
-  StarFilled: S('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/>', 18, 18),
-  ChevronRight: S('<path d="m9 18 6-6-6-6"/>', 16, 16),
+  Star: S('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>', 16, 16),
+  StarFilled: S('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/>', 16, 16),
   Refresh: S('<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>'),
   ArrowLeft: S('<path d="m15 18-6-6 6-6"/>', 18, 18),
-  AlertCircle: S('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 16, 16),
+  ChevronRight: S('<path d="m9 18 6-6-6-6"/>', 16, 16),
+  Alert: S('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', 15, 15),
 }
 
-/* ─── Logo SVG ─── */
-
 const LogoSvg = `
-<svg class="header__logo-svg" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<svg class="header__logo-svg" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <path d="M144 32a80 80 0 1 0 0 160 80 80 0 0 0 0-160Zm0 130a50 50 0 1 1 0-100 50 50 0 0 1 0 100Z" fill="currentColor"/>
-  <path d="M144 62v42l30 20" stroke="#D79A32" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <path d="M144 62v42l30 20" stroke="#F5C16C" stroke-width="14" stroke-linecap="round" fill="none"/>
   <path d="M228 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
   <path d="M298 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
   <path d="M368 30q0 26 20 40t20 40q0 26-20 40" stroke="currentColor" stroke-width="16" stroke-linecap="round" fill="none"/>
   <path d="M78 208h306a12 12 0 0 1 12 12v168a86 86 0 0 1-86 86H152a86 86 0 0 1-86-86V220a12 12 0 0 1 12-12Z" class="cup-body" stroke="currentColor" stroke-width="16"/>
   <path d="M396 250h56a44 44 0 0 1 44 44v40a76 76 0 0 1-76 76h-24" fill="none" stroke="currentColor" stroke-width="16"/>
-  <circle cx="330" cy="290" r="9" fill="#D79A32"/>
-  <rect x="322" y="320" width="16" height="60" rx="8" fill="#D79A32"/>
+  <circle cx="330" cy="290" r="9" fill="#F5C16C"/>
+  <rect x="322" y="320" width="16" height="60" rx="8" fill="#F5C16C"/>
   <path d="M40 442h380a10 10 0 0 1 10 10 62 62 0 0 1-62 62H92a62 62 0 0 1-62-62 10 10 0 0 1 10-10Z" fill="currentColor"/>
 </svg>`
 
-/* ─── TradingView Calendar Widget ─── */
-
+/* ─── TradingView Calendar ─── */
 function getCalendarUrl(theme) {
   const s = {
     colorTheme: theme,
     isTransparent: true,
     width: '100%',
-    height: 380,
+    height: 360,
     importanceFilter: '0,1',
     countryFilter: 'br,us',
   }
@@ -67,191 +67,6 @@ function getCalendarUrl(theme) {
   return url.toString()
 }
 
-/* ─── State ─── */
-
-const state = {
-  view: 'main',
-  theme: 'dark',
-  loading: true,
-  error: null,
-  useMock: false,
-  backendOnline: false,
-  watchlist: [],
-  asset: null,
-  termStructures: {},
-  ivPercentile: null,
-  macro: null,
-  news: null,
-  analystNote: '',
-  calendarEvents: [],
-  selectedSymbol: '',
-  licenseTier: 'free',
-  licenseKey: '',
-  favorites: [],
-}
-
-/* ─── Render ─── */
-
-function render() {
-  const app = document.getElementById('app')
-  if (!app) return
-
-  let frame = document.getElementById('tv-calendar')
-  const keepFrame = frame && frame.src === getCalendarUrl(state.theme)
-  const savedFrame = keepFrame ? frame : null
-  if (savedFrame) savedFrame.remove()
-
-  const searchInput = document.querySelector('[data-search-input]')
-  const searchIsFocused = document.activeElement === searchInput
-  const searchValue = searchInput ? searchInput.value : null
-  const searchDd = document.querySelector('[data-search-dropdown]')
-  const searchDdWasOpen = searchDd ? searchDd.classList.contains('search__dropdown--open') : false
-
-  const licenseInput = document.querySelector('[data-license-input]')
-  const licenseIsFocused = document.activeElement === licenseInput
-  const licenseValue = licenseInput ? licenseInput.value : null
-
-  if (state.view === 'settings') {
-    app.innerHTML = renderSettings()
-  } else if (state.loading) {
-    app.innerHTML = renderLoading()
-  } else {
-    app.innerHTML = `
-      ${renderHeader()}
-      ${renderMacro()}
-      ${renderWatchlist()}
-      ${calendarMarkup()}
-      ${renderInsights()}
-      ${renderSearch()}
-      ${state.error ? renderError() : renderAssetCard()}
-      ${state.error ? '' : renderTermStructure()}
-      ${state.error ? '' : renderAnalystCard()}
-      ${renderCTA()}
-      ${renderDisclaimer()}
-    `
-  }
-
-  const mount = document.getElementById('calendar-mount')
-  if (mount) {
-    if (savedFrame) mount.appendChild(savedFrame)
-    else mount.appendChild(buildCalendarIframe())
-  }
-
-  if (searchValue !== null) {
-    const newSearch = document.querySelector('[data-search-input]')
-    if (newSearch) {
-      newSearch.value = searchValue
-      if (searchIsFocused) {
-        newSearch.focus()
-        newSearch.setSelectionRange(searchValue.length, searchValue.length)
-      }
-      if (searchDdWasOpen) applySearchFilter(searchValue)
-    }
-  }
-
-  if (licenseValue !== null) {
-    const newLicense = document.querySelector('[data-license-input]')
-    if (newLicense) {
-      newLicense.value = licenseValue
-      if (licenseIsFocused) {
-        newLicense.focus()
-        newLicense.setSelectionRange(licenseValue.length, licenseValue.length)
-      }
-    }
-  }
-}
-
-/* ─── Component renders ─── */
-
-function renderHeader() {
-  const chip = state.useMock
-    ? `<button class="header__chip header__chip--mock" data-action="toggle-mock" title="Modo mock ativo. Clique para desativar.">MOCK</button>`
-    : !state.backendOnline && !state.loading
-      ? `<button class="header__chip header__chip--offline" data-action="toggle-mock" title="Backend offline. Clique para usar mock.">OFFLINE</button>`
-      : ''
-  return `
-    <header class="header">
-      <div class="header__brand">
-        <div class="header__logo">${LogoSvg}</div>
-        <div class="header__titles">
-          <h1 class="header__title">Opera Morning Call</h1>
-          <p class="header__subtitle">Seu checklist de pr\u00e9-abertura.</p>
-        </div>
-      </div>
-      <div class="header__actions">
-        ${chip}
-        ${state.loading ? '<span class="header__loader"></span>' : ''}
-        <button class="header__btn" data-action="toggle-theme" title="Alternar tema">
-          ${state.theme === 'dark' ? Icon.Sun : Icon.Moon}
-        </button>
-        <button class="header__btn" data-action="refresh" title="Atualizar">
-          ${Icon.Refresh}
-        </button>
-        <button class="header__btn" data-action="open-settings" title="Configura\u00e7\u00f5es">
-          ${Icon.Settings}
-        </button>
-      </div>
-    </header>
-  `
-}
-
-function renderMacro() {
-  const m = state.macro
-  if (!m) return ''
-  const items = [
-    { label: 'Selic', value: m.selic, suffix: '% a.a.', source: 'BCB/SGS 432' },
-    { label: 'IPCA 12m', value: m.ipca12m, suffix: '%', source: 'BCB/SGS 13522' },
-    { label: 'CDI', value: m.cdi, suffix: '% a.a.', source: 'BCB/SGS 4389' },
-  ]
-  const fmt = (v) => (v == null || Number.isNaN(Number(v)) ? '&mdash;' : Number(v).toFixed(2))
-  return `
-    <div class="card-section macro-bar" title="Fonte: Banco Central do Brasil · SGS">
-      <div class="section-title">Indicadores Macro</div>
-      <div class="macro-bar__items">
-        ${items.map(i => `
-          <div class="macro-bar__item">
-            <span class="macro-bar__label">${esc(i.label)}</span>
-            <span class="macro-bar__value">${fmt(i.value)}<small>${esc(i.suffix)}</small></span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `
-}
-
-function renderWatchlist() {
-  const items = state.watchlist
-  if (!items || items.length === 0) return ''
-  return `
-    <div class="watchlist">
-      ${items.map(item => {
-        const change = Number(item.changePercent) || 0
-        const price = Number(item.price ?? item.lastClose) || 0
-        const isActive = item.symbol === state.selectedSymbol
-        const isUp = change >= 0
-        return `
-          <button class="watchlist__item ${isActive ? 'watchlist__item--active' : ''}"
-                  data-symbol="${esc(item.symbol)}" data-action="select-watchlist">
-            <span class="watchlist__symbol">${esc(item.symbol)}</span>
-            <span class="watchlist__price ${isUp ? 'up' : 'down'}">${price.toLocaleString('pt-BR')}</span>
-            <span class="watchlist__change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${change.toFixed(2)}%</span>
-          </button>
-        `
-      }).join('')}
-      <p class="watchlist__footnote">Fechamento anterior \u00B7 brapi.dev</p>
-    </div>
-  `
-}
-
-function calendarMarkup() {
-  return `
-    <div class="card-section calendar-container">
-      <div class="section-title">Calend\u00e1rio Econ\u00f4mico</div>
-      <div id="calendar-mount"></div>
-    </div>
-  `
-}
-
 function buildCalendarIframe() {
   const iframe = document.createElement('iframe')
   iframe.id = 'tv-calendar'
@@ -259,253 +74,463 @@ function buildCalendarIframe() {
   iframe.src = getCalendarUrl(state.theme)
   iframe.setAttribute('frameborder', '0')
   iframe.setAttribute('scrolling', 'no')
-  iframe.title = 'Calend\u00e1rio Econ\u00f4mico TradingView'
+  iframe.setAttribute('loading', 'lazy')
+  iframe.title = 'Calend\u00e1rio econ\u00f4mico (TradingView)'
   return iframe
 }
 
-function renderInsights() {
-  const news = state.news
-  if (!news || news.length === 0) return ''
-  return `
-    <div class="card-section">
-      <div class="section-title">Mercado Hoje</div>
-      ${news.map(n => `
-        <button class="insight-item" data-action="open-news" data-url="${esc(n.url || '#')}">
-          <p class="insight-item__title">${esc(n.title)}</p>
-          <span class="insight-item__time">${esc(n.source || 'Opera Trader')} \u00B7 ${esc(n.timeAgo)}</span>
-        </button>
-      `).join('')}
-    </div>
-  `
+/* ─── State ─── */
+const state = {
+  view: 'main',
+  theme: 'dark',
+  useMock: false,
+  backend: { ok: true, checked: false, error: null },
+  booting: true,
+  refreshing: false,
+  selectedSymbol: '',
+  favorites: [],
+  licenseTier: 'free',
+  licenseKey: '',
+  data: {
+    watchlist: null,
+    calendar: null,
+    macro: null,
+    termWIN: null,
+    termWDO: null,
+    news: null,
+    quote: null,
+  },
 }
 
-function renderSearch() {
-  const resolved = state.selectedSymbol || resolveCurrentContract('WIN')
-  return `
-    <div class="search" data-component="search">
-      <div class="section-title">Selecione ou digite Ativo</div>
-      <input class="search__input" type="text" placeholder="Buscar ativo \u2014 ex: WINQ26, WDOQ26"
-        data-search-input value="${esc(resolved)}" autocomplete="off" spellcheck="false" />
-      <div class="search__dropdown" data-search-dropdown>
-        ${ASSET_LIST.map(a => {
-          const sym = getResolvedSymbol(a)
-          const isActive = sym === state.selectedSymbol
-          return `
-            <div class="search__option ${isActive ? 'search__option--active' : ''}"
-                 data-symbol="${esc(sym)}" data-base="${esc(a.base)}">
-              <span class="search__option-symbol">${esc(sym)}</span>
-              <span class="search__option-name">${esc(a.name)}</span>
-            </div>
-          `
-        }).join('')}
-      </div>
-    </div>
-  `
+let refreshSeq = 0
+let detailSeq = 0
+let renderScheduled = false
+let searchTimer = 0
+
+/* ─── Render ─── */
+function scheduleRender() {
+  if (renderScheduled) return
+  renderScheduled = true
+  requestAnimationFrame(() => {
+    renderScheduled = false
+    render()
+  })
 }
 
-function renderAssetCard() {
-  const a = state.asset
-  if (!a) return ''
-  const change = Number(a.changePercent) || 0
-  const price = Number(a.price ?? a.lastClose) || 0
-  const isUp = change >= 0
-  const changeClass = isUp ? 'up' : 'down'
-  const changeSign = isUp ? '+' : ''
-  const isFav = state.favorites.includes(a.symbol)
+function render() {
+  const app = document.getElementById('app')
+  if (!app) return
 
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0
+  const searchInput = document.querySelector('[data-search-input]')
+  const searchIsFocused = document.activeElement === searchInput
+  const searchValue = searchInput ? searchInput.value : state.selectedSymbol
+  const dd = document.querySelector('[data-search-dropdown]')
+  const ddWasOpen = dd ? dd.classList.contains('search__dropdown--open') : false
+  const licenseInput = document.querySelector('[data-license-input]')
+  const licenseIsFocused = document.activeElement === licenseInput
+
+  const frame = document.getElementById('tv-calendar')
+  const keepFrame = frame && frame.src === getCalendarUrl(state.theme)
+  const savedFrame = keepFrame ? frame : null
+  if (savedFrame) savedFrame.remove()
+
+  app.innerHTML = state.view === 'settings' ? renderSettings() : renderMain()
+  mountCalendar(savedFrame)
+  restoreSearch(searchValue, searchIsFocused, ddWasOpen)
+  if (licenseIsFocused) {
+    const input = document.querySelector('[data-license-input]')
+    if (input) {
+      input.focus()
+      const n = input.value.length
+      try { input.setSelectionRange(n, n) } catch {}
+    }
+  }
+  window.scrollTo(0, scrollY)
+}
+
+function mountCalendar(savedFrame) {
+  const mount = document.querySelector('[data-calendar-mount]')
+  if (!mount) return
+  mount.appendChild(savedFrame || buildCalendarIframe())
+}
+
+function restoreSearch(value, focused, open) {
+  const input = document.querySelector('[data-search-input]')
+  if (!input) return
+  if (value != null) input.value = value
+  if (focused) {
+    input.focus()
+    const n = input.value.length
+    try { input.setSelectionRange(n, n) } catch {}
+  }
+  if (open && input.value) applySearchFilter(input.value)
+}
+
+/* ─── Header ─── */
+function renderHeader() {
+  const busy = state.booting || state.refreshing
+  let chip = ''
+  if (state.useMock) {
+    chip = `<button class="status-chip status-chip--demo" data-action="toggle-demo" title="Modo demonstra\u00e7\u00e3o ativo. Clique para voltar aos dados reais.">DEMO</button>`
+  } else if (state.backend.checked && !state.backend.ok) {
+    chip = `<span class="status-chip status-chip--offline" title="Worker indispon\u00edvel${state.backend.error ? `: ${esc(state.backend.error)}` : ''}">OFFLINE</span>`
+  }
   return `
-    <div class="asset-card">
-      <div class="asset-card__header">
-        <div class="asset-card__info">
-          <div class="asset-card__symbol-row">
-            <span class="asset-card__symbol">${esc(a.symbol)}</span>
-            ${!a.isMarketOpen ? '<span class="asset-card__badge-closed">MERCADO FECHADO</span>' : ''}
-          </div>
-          <span class="asset-card__name">${esc(a.name)}</span>
+    <header class="header">
+      <div class="header__brand">
+        <div class="header__logo">${LogoSvg}</div>
+        <div class="header__titles">
+          <h1 class="header__title">Opera Morning Call</h1>
+          <p class="header__subtitle">Pr\u00e9-abertura B3</p>
         </div>
-        <button class="asset-card__favorite" data-action="toggle-favorite" data-symbol="${esc(a.symbol)}" title="Favorito">
-          ${isFav ? Icon.StarFilled : Icon.Star}
+      </div>
+      <div class="header__actions">
+        ${chip}
+        <button class="icon-btn ${state.theme === 'dark' ? '' : 'icon-btn--active'}" data-action="toggle-theme" aria-label="Alternar tema" title="Alternar tema">
+          ${state.theme === 'dark' ? Icon.Sun : Icon.Moon}
+        </button>
+        <button class="icon-btn" data-action="refresh" aria-label="Atualizar dados" title="Atualizar" ${busy ? 'disabled' : ''}>
+          ${busy ? '<span class="spinner" aria-hidden="true"></span>' : Icon.Refresh}
+        </button>
+        <button class="icon-btn" data-action="open-settings" aria-label="Configura\u00e7\u00f5es" title="Configura\u00e7\u00f5es">
+          ${Icon.Settings}
         </button>
       </div>
-      <div class="asset-card__prices">
-        <span class="asset-card__price">${price.toLocaleString('pt-BR')}</span>
-        <span class="asset-card__change asset-card__change--${changeClass}">
-          ${changeSign}${change.toFixed(2)}%
-        </span>
-      </div>
-      ${state.asset.lastClose ? `<div class="asset-card__footnote">Fechamento anterior \u00B7 brapi.dev</div>` : ''}
-    </div>
+    </header>
   `
 }
 
-function renderTermStructure() {
-  const all = state.termStructures
-  const hasData = (all.WIN && all.WIN.length > 0) || (all.WDO && all.WDO.length > 0)
-  if (!hasData) return ''
+/* ─── Pairs (WIN / WDO) ─── */
+function assetName(base) {
+  return ASSET_LIST.find(a => a.base === base)?.name || base
+}
 
-  const iv = state.ivPercentile
-  const ivColor = iv == null ? '' : iv < 50 ? 'var(--color-success)' : iv <= 80 ? 'var(--color-warning)' : 'var(--color-danger)'
-  const selectedBase = state.selectedSymbol.match(/^(WIN|WDO)/)?.[1] || 'WIN'
-  const selectedTerms = all[selectedBase] || []
+function currentPair(base) {
+  const res = state.data.watchlist
+  if (!res) return { kind: 'loading' }
+  if (res.status === 'error') return { kind: 'error', res }
+  const list = Array.isArray(res.data) ? res.data : []
+  const item = list.find(q => baseOf(q.symbol) === base)
+  if (!item) return { kind: 'empty', res }
+  return { kind: 'ok', res, item }
+}
 
-  const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+function renderPairs() {
+  return `<div class="pairs">${renderPair('WIN')}${renderPair('WDO')}</div>`
+}
 
-  function renderRow(base, terms) {
-    if (!terms || terms.length === 0) return ''
-    const maxIv = Math.max(...terms.map(t => Number(t.iv) || 0)) || 1
+function renderPair(base) {
+  const name = assetName(base)
+  const p = currentPair(base)
+
+  if (p.kind === 'loading') {
+    return `<div class="skeleton skeleton--pair" role="status" aria-label="Carregando ${esc(base)}"></div>`
+  }
+
+  if (p.kind === 'error' || p.kind === 'empty') {
+    const desc = p.kind === 'error' ? 'Falha ao carregar' : 'Sem cota\u00e7\u00e3o'
     return `
-      <div class="ts-row">
-        <span class="ts-row__label">${esc(base)}</span>
-        <div class="term-structure">
-          ${terms.map(t => {
-            const pct = (Number(t.iv) || 0) / maxIv * 100
-            const m = t.expiration ? MONTHS[new Date(t.expiration).getMonth()] : ''
-            return `
-              <div class="ts-item">
-                <div class="ts-bar ${t.isCurrent ? 'ts-bar--current' : ''}"
-                     style="height:${Math.max(pct, 15)}%"></div>
-                <span class="ts-label">${esc(t.contract.replace(/^.{3}/, ''))}</span>
-                <span class="ts-month">${esc(m)}</span>
-              </div>
-            `
-          }).join('')}
-        </div>
-      </div>
+      <button class="pair pair--error" data-action="retry-watchlist" aria-label="${esc(base)} indispon\u00edvel. Tentar novamente">
+        <span class="pair__ticker">${esc(base)}</span>
+        <span class="pair__error-title">Indispon\u00edvel</span>
+        <span class="pair__error-desc">${esc(desc)} \u00b7 tentar novamente</span>
+      </button>
     `
   }
 
+  const { res, item } = p
+  const change = formatChange(item.changePercent)
+  const price = item.price ?? item.lastClose
+  const type = priceTypeLabel(item.priceType)
+  const asOf = formatDateTime(item.lastUpdated)
+  const stale = res.status === 'stale'
+  const prevClose = item.lastClose != null && item.lastClose !== price
+    ? `<span class="pair__prev">Fech. anterior ${formatPrice(item.lastClose, base)}</span>`
+    : ''
+  const statusText = stale
+    ? `<span class="pair__meta">${asOf ? esc(asOf) + ' \u00b7 ' : ''}<span class="muted">Desatualizado</span></span>`
+    : `<span class="pair__meta">${asOf ? esc(asOf) : '&nbsp;'}</span>`
+
   return `
-    <div class="card-section">
-      <div class="section-title">Vencimentos</div>
-      ${renderRow('WIN', all.WIN)}
-      ${renderRow('WDO', all.WDO)}
-      ${iv != null ? `
-        <div class="ts-iv" style="--iv-color: ${ivColor}" title="Estimativa derivada da oscila\u00e7\u00e3o do contrato \u2014 n\u00e3o \u00e9 volatilidade impl\u00edcita de op\u00e7\u00f5es.">
-          <span class="ts-iv__value">${(selectedTerms.find(t => t.isCurrent)?.iv ?? 0).toFixed(1)}%</span>
-          <span class="ts-iv__label">Vol. estimada (proxy) \u00b7 \u00edndice ${iv}</span>
-        </div>
-      ` : ''}
-    </div>
+    <button class="pair" data-action="select-symbol" data-symbol="${esc(item.symbol)}"
+            aria-label="${esc(base)} ${esc(name)}, contrato ${esc(item.symbol)}, pre\u00e7o ${esc(formatPrice(price, base))}, varia\u00e7\u00e3o ${esc(change.text)}">
+      <span class="pair__top">
+        <span class="pair__name">${esc(base)} \u00b7 ${esc(name)}</span>
+        <span class="pair__ticker">${esc(item.symbol)}</span>
+      </span>
+      <span class="pair__price">${esc(formatPrice(price, base))}</span>
+      <span class="pair__row">
+        <span class="pair__type">${esc(type)}</span>
+        <span class="pair__change pair__change--${change.tone}">${esc(change.text)}</span>
+      </span>
+      ${prevClose}
+      ${statusText}
+    </button>
   `
 }
 
-function renderAnalystCard() {
-  if (!state.analystNote) return ''
-  const lines = state.analystNote.split('\n').filter(Boolean)
-
-  return `
-    <div class="analyst-card">
-      <div class="analyst-card__badge">
-        <span class="analyst-card__dot"></span>
-        <span class="analyst-card__badge-text">An\u00e1lise Opera Trader</span>
-      </div>
-      <p class="analyst-card__text">${lines.map(l => `${esc(l)}<br>`).join('')}</p>
-    </div>
-  `
+/* ─── Agenda ─── */
+function statusBadge(res) {
+  if (!res) return ''
+  if (res.demo) return `<span class="block-badge block-badge--demo">DEMO</span>`
+  if (res.status === 'stale') return `<span class="block-badge block-badge--stale">Desatualizado</span>`
+  if (res.status === 'error') return `<span class="block-badge block-badge--error">Indispon\u00edvel</span>`
+  return ''
 }
 
-function renderCTA() {
-  return `
-    <div class="cta-footer">
-      <p class="cta-context"><strong>Automa\u00e7\u00e3o e Intelig\u00eancia de mercado. Tudo em um s\u00f3 lugar para elevar seu trading. Conhe\u00e7a!</strong></p>
-      <button class="cta-opera-trader" data-action="open-platform">
-        Entrar na lista de espera do Opera Trader
-        ${Icon.ChevronRight}
-      </button>
-    </div>
-  `
+function impactDots(impact) {
+  const n = Math.max(0, Math.min(3, Number(impact) || 0))
+  const dots = [1, 2, 3].map(i =>
+    `<span class="impact__dot ${i <= n ? 'impact__dot--on' : ''}"></span>`
+  ).join('')
+  return `<span class="impact" role="img" aria-label="Impacto ${n} de 3">${dots}</span>`
 }
 
-function renderDisclaimer() {
-  return `
-    <p class="disclaimer">
-      Conte\u00fado exclusivamente informativo e educacional. N\u00e3o constitui recomenda\u00e7\u00e3o, oferta ou consultoria de investimentos.
-    </p>
-  `
-}
+function renderAgenda() {
+  const res = state.data.calendar
+  let summary = ''
 
-function renderError() {
-  return `
-    <div class="error-card">
-      <div class="error-card__icon">${Icon.AlertCircle}</div>
-      <div class="error-card__content">
-        <p class="error-card__title">Dados indispon\u00edveis</p>
-        <p class="error-card__desc">${esc(state.error)}</p>
-      </div>
-    </div>
-  `
-}
-
-function renderLoading() {
-  return `
-    ${renderHeader()}
-    ${renderMacro()}
-    ${renderWatchlist()}
-    ${calendarMarkup()}
-    ${renderInsights()}
-    ${renderSearch()}
-    <div class="skeleton skeleton--card"></div>
-    <div class="skeleton skeleton--sm"></div>
-    <div class="skeleton skeleton--card"></div>
-    <div class="skeleton skeleton--sm"></div>
-  `
-}
-
-function renderSettings() {
-  return `
-    <div class="settings">
-      <div class="settings__header">
-        <button class="settings__back" data-action="back" title="Voltar">${Icon.ArrowLeft}</button>
-        <h2 class="settings__title">Configura\u00e7\u00f5es</h2>
-      </div>
-      <div class="settings__section">
-        <span class="settings__label">Tema</span>
-        <button class="settings__theme-btn" data-action="toggle-theme">
-          ${state.theme === 'dark' ? '\u2600 Claro' : '\u263E Escuro'}
-        </button>
-      </div>
-      <div class="settings__section">
-        <span class="settings__label">Licen\u00e7a</span>
-        <div class="settings__license-row">
-          <input class="settings__input" type="text" placeholder="Chave de licen\u00e7a"
-            data-license-input value="${esc(state.licenseKey)}" />
-          <button class="settings__validate-btn" data-action="validate-license">Validar</button>
-        </div>
-        <div class="settings__tier-row">
-          <span class="settings__tier-label">Status:</span>
-          ${tierBadge(state.licenseTier)}
-        </div>
-        <p class="settings__note">O selo \u00e9 informativo e n\u00e3o altera os dados exibidos.</p>
-      </div>
-      <div class="settings__section">
-        <span class="settings__label">Favoritos (${state.favorites.length}/5)</span>
-        ${state.favorites.length === 0
-          ? '<p class="settings__empty-favs">Nenhum favorito ainda.</p>'
-          : state.favorites.map(sym => `
-              <div class="settings__fav-row">
-                <span class="settings__fav-symbol">${esc(sym)}</span>
-                <button class="settings__fav-remove" data-action="remove-favorite" data-symbol="${esc(sym)}">Remover</button>
-              </div>
-            `).join('')
-        }
-      </div>
-    </div>
-  `
-}
-
-function tierBadge(tier) {
-  const map = {
-    free: { label: 'Free', cls: 'badge--free' },
-    founder: { label: 'Founder Member', cls: 'badge--founder' },
-    pro: { label: 'Pro', cls: 'badge--pro' },
+  if (!res) {
+    summary = `<div class="skeleton skeleton--line" role="status" aria-label="Carregando agenda"></div>`
+  } else if (res.status === 'error') {
+    summary = `
+      <div class="errorline">
+        <span>Agenda resumida indispon\u00edvel.</span>
+        <button class="retry" data-action="retry-calendar">Tentar novamente</button>
+      </div>`
+  } else {
+    const events = Array.isArray(res.data) ? res.data : []
+    const next = pickNextEvent(events, new Date())
+    if (next) {
+      const when = formatEventWhen(next, new Date())
+      const stale = res.status === 'stale'
+      summary = `
+        <div class="next">
+          <div class="next__when">
+            <span class="next__day">Pr\u00f3ximo</span>
+            <span class="next__time">${esc(when || '\u2014')}</span>
+          </div>
+          <div class="next__body">
+            <span class="next__name">${esc(next.event || 'Evento')}</span>
+            <span class="next__tags">
+              ${impactDots(next.impact)}
+              ${next.country ? `<span>${esc(next.country)}</span>` : ''}
+              ${next.estimated ? '<span class="tag-est">Estimado</span>' : ''}
+              ${stale ? '<span class="tag-est">Desatualizado</span>' : ''}
+            </span>
+          </div>
+        </div>`
+    } else {
+      const suffix = res.status === 'stale' ? ' (dados salvos)' : ''
+      summary = `<p class="empty">Sem eventos futuros na agenda consultada${esc(suffix)}.</p>`
+    }
   }
-  const m = map[tier] || map.free
-  return `<span class="badge ${m.cls}">${m.label}</span>`
+
+  return `
+    <section class="section" aria-labelledby="agenda-title">
+      <div class="section__head">
+        <span class="section__title" id="agenda-title">Agenda econ\u00f4mica</span>
+        ${statusBadge(res)}
+      </div>
+      ${summary}
+      <div class="calendar" data-calendar-mount></div>
+    </section>
+  `
 }
 
-/* ─── Search filtering ─── */
+/* ─── Macro ─── */
+function renderMacro() {
+  const res = state.data.macro
+  const head = `
+    <div class="section__head">
+      <span class="section__title">Indicadores macro</span>
+      <span class="section__meta">BCB/SGS</span>
+      ${statusBadge(res)}
+    </div>`
 
-const SYMBOL_RE = /^[A-Z0-9]{2,12}$/
+  if (!res) {
+    return `<section class="section">${head}<div class="skeleton skeleton--line" role="status" aria-label="Carregando indicadores"></div></section>`
+  }
+
+  const payload = res.data && typeof res.data === 'object' ? res.data : {}
+  const series = payload.series && typeof payload.series === 'object' ? payload.series : null
+  const commonDate = payload.asOf || null
+  const defs = [
+    { key: 'selic', label: 'Selic', unit: '% a.a.' },
+    { key: 'ipca12m', label: 'IPCA 12m', unit: '%' },
+    { key: 'cdi', label: 'CDI', unit: '% a.a.' },
+  ]
+
+  const items = defs.map(d => {
+    const entry = series && series[d.key] != null ? series[d.key] : null
+    const value = entry && typeof entry === 'object' ? entry.value : (payload[d.key] ?? (entry == null ? null : entry))
+    const date = entry && typeof entry === 'object' ? entry.date : null
+    const num = Number(value)
+    const valid = value != null && value !== '' && Number.isFinite(num)
+    const shown = valid
+      ? `<span class="macro__value">${num.toFixed(2)}<small>${esc(d.unit)}</small></span>`
+      : `<span class="macro__value">\u2014</span>`
+    const dateLine = !commonDate && date
+      ? `<span class="macro__date">${esc(formatDateTime(date))}</span>`
+      : ''
+    return `<div class="macro__item">
+      <span class="macro__label">${esc(d.label)}</span>
+      ${shown}
+      ${dateLine}
+    </div>`
+  }).join('')
+
+  const errorLine = res.status === 'error'
+    ? `<div class="errorline"><span>Indicadores indispon\u00edveis.</span><button class="retry" data-action="retry-macro">Tentar novamente</button></div>`
+    : ''
+
+  return `
+    <section class="section">
+      ${head}
+      <div class="macro">${items}</div>
+      ${commonDate ? `<p class="section__meta" style="margin-left:0">Refer\u00eancia: ${esc(formatDateTime(commonDate))}</p>` : ''}
+      ${errorLine}
+    </section>
+  `
+}
+
+/* ─── Term structure ─── */
+function termGroups() {
+  const groups = []
+  const defs = [
+    { base: 'WIN', res: state.data.termWIN },
+    { base: 'WDO', res: state.data.termWDO },
+  ]
+  for (const { base, res } of defs) {
+    const arr = res && Array.isArray(res.data) ? res.data.filter(Boolean) : []
+    if (arr.length === 0) continue
+    const sorted = [...arr].sort((a, b) => {
+      const ta = a.expiration ? new Date(a.expiration).getTime() : Infinity
+      const tb = b.expiration ? new Date(b.expiration).getTime() : Infinity
+      return ta - tb
+    })
+    groups.push({ base, res, contracts: sorted })
+  }
+  return groups
+}
+
+function currentContractFor(base) {
+  const res = base === 'WIN' ? state.data.termWIN : state.data.termWDO
+  const arr = res && Array.isArray(res.data) ? res.data : []
+  const expected = resolveCurrentContract(base)
+  if (arr.some(t => t.contract === expected)) return expected
+  return (arr.find(t => t.isCurrent) || {}).contract || expected
+}
+
+function renderTerm() {
+  const groups = termGroups()
+  const head = `
+    <div class="section__head">
+      <span class="section__title">Vencimentos</span>
+      ${statusBadge(state.data.termWIN) || statusBadge(state.data.termWDO)}
+    </div>`
+
+  if (groups.length === 0) {
+    const failing = state.data.termWIN?.status === 'error' && state.data.termWDO?.status === 'error'
+    if (state.data.termWIN || state.data.termWDO) {
+      return `
+        <section class="section">
+          ${head}
+          <div class="errorline">
+            <span>Vencimentos indispon\u00edveis.</span>
+            <button class="retry" data-action="retry-term">Tentar novamente</button>
+          </div>
+        </section>`
+    }
+    return `<section class="section">${head}<div class="skeleton skeleton--line" role="status" aria-label="Carregando vencimentos"></div></section>`
+  }
+
+  const blocks = groups.map(({ base, res, contracts }) => {
+    const current = currentContractFor(base)
+    const expected = resolveCurrentContract(base)
+    if (!contracts.some(t => t.contract === expected)) {
+      // Não cria regra ad hoc: apenas registra a divergência para investigação.
+      console.warn(`[OMC] contrato vigente divergente em ${base}: esperado ${expected}`)
+    }
+    const currentRow = contracts.find(t => t.contract === current)
+    const vol = currentRow && Number.isFinite(Number(currentRow.iv))
+      ? `<span class="term__vol">Vol. est. <b>${Number(currentRow.iv).toFixed(1)}%</b></span>`
+      : ''
+
+    const rows = contracts.map(t => {
+      const isCurrent = t.contract === current
+      const isSelected = t.contract === state.selectedSymbol
+      return `
+        <button class="term__row ${isCurrent ? 'term__row--current' : ''} ${isSelected ? 'term__row--selected' : ''}"
+                data-action="select-symbol" data-symbol="${esc(t.contract)}"
+                aria-label="${esc(t.contract)}, vencimento ${esc(formatExpiration(t.expiration) || 'desconhecido')}${isCurrent ? ', contrato vigente' : ''}">
+          <span class="term__ticker">${esc(t.contract)}</span>
+          ${isCurrent ? '<span class="term__flag">Vigente</span>' : ''}
+          ${isSelected && !isCurrent ? '<span class="term__flag term__flag--sel">Selecionado</span>' : ''}
+          <span class="term__exp">${esc(formatExpiration(t.expiration) || '\u2014')}</span>
+        </button>`
+    }).join('')
+
+    return `
+      <div class="term__group">
+        <div class="term__group-head">
+          <span class="term__group-title">${esc(base)} \u00b7 ${esc(assetName(base))}</span>
+          ${vol}
+        </div>
+        ${rows}
+      </div>`
+  }).join('')
+
+  return `<section class="section">${head}<div class="term">${blocks}</div></section>`
+}
+
+/* ─── Search ─── */
+function searchOptions() {
+  const seen = new Set()
+  const options = []
+  for (const group of termGroups()) {
+    for (const t of group.contracts) {
+      if (seen.has(t.contract)) continue
+      seen.add(t.contract)
+      options.push({ symbol: t.contract, base: group.base, expiration: t.expiration })
+    }
+  }
+  if (options.length === 0) {
+    for (const asset of ASSET_LIST) {
+      const symbol = resolveCurrentContract(asset.base)
+      if (seen.has(symbol)) continue
+      seen.add(symbol)
+      options.push({ symbol, base: asset.base, expiration: null })
+    }
+  }
+  return options
+}
+
+function renderSearch() {
+  const value = state.selectedSymbol || resolveCurrentContract('WIN')
+  const options = searchOptions()
+  return `
+    <div class="section">
+      <div class="section__head"><span class="section__title">Buscar contrato</span></div>
+      <div class="search" data-component="search">
+        <input class="search__input" type="text" placeholder="Ex.: WINQ26, WDOQ26"
+          data-search-input value="${esc(value)}" autocomplete="off" spellcheck="false"
+          aria-label="Buscar contrato" />
+        <div class="search__dropdown" data-search-dropdown role="listbox">
+          ${options.map(o => `
+            <button class="search__option ${o.symbol === state.selectedSymbol ? 'search__option--active' : ''}"
+                    role="option" data-symbol="${esc(o.symbol)}" data-action="select-symbol">
+              <span class="search__option-symbol">${esc(o.symbol)}</span>
+              <span class="search__option-name">${esc(assetName(o.base))}</span>
+              <span class="search__option-exp">${esc(formatExpiration(o.expiration) || '')}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `
+}
 
 function applySearchFilter(raw) {
   const q = (raw || '').trim().toUpperCase()
@@ -518,15 +543,332 @@ function applySearchFilter(raw) {
   if (dd) dd.classList.toggle('search__dropdown--open', q.length > 0)
 }
 
-/* ─── Event binding ─── */
+/* ─── Favorites ─── */
+function renderFavorites() {
+  if (!state.favorites || state.favorites.length === 0) return ''
+  return `
+    <div class="section">
+      <div class="section__head"><span class="section__title">Favoritos</span></div>
+      <div class="chips">
+        ${state.favorites.map(sym => `
+          <button class="chip ${sym === state.selectedSymbol ? 'chip--active' : ''}"
+                  data-action="select-symbol" data-symbol="${esc(sym)}">${esc(sym)}</button>
+        `).join('')}
+      </div>
+    </div>
+  `
+}
+
+/* ─── Detail ─── */
+function termEntryFor(symbol) {
+  for (const group of termGroups()) {
+    const found = group.contracts.find(t => t.contract === symbol)
+    if (found) return { base: group.base, entry: found }
+  }
+  return { base: baseOf(symbol), entry: null }
+}
+
+function renderDetail() {
+  const sym = state.selectedSymbol
+  if (!sym) return ''
+
+  const res = state.data.quote
+  const { base, entry } = termEntryFor(sym)
+  const isFav = state.favorites.includes(sym)
+  const header = `
+    <div class="detail__head">
+      <div class="detail__id">
+        <span class="detail__symbol">${esc(sym)}</span>
+        <span class="detail__name">${esc(assetName(base))}</span>
+      </div>
+      <button class="detail__fav" data-action="toggle-favorite" data-symbol="${esc(sym)}"
+              aria-label="${isFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}"
+              title="${isFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}">
+        ${isFav ? Icon.StarFilled : Icon.Star}
+      </button>
+    </div>`
+
+  let body = ''
+  if (!res) {
+    body = `<div class="skeleton skeleton--line" role="status" aria-label="Carregando cota\u00e7\u00e3o"></div>`
+  } else if (res.status === 'error') {
+    body = `<div class="errorline"><span>Cota\u00e7\u00e3o indispon\u00edvel.</span><button class="retry" data-action="retry-quote">Tentar novamente</button></div>`
+  } else {
+    const d = res.data || {}
+    const change = formatChange(d.changePercent)
+    const price = d.price ?? d.lastClose
+    const asOf = formatDateTime(d.lastUpdated)
+    const vol = entry && Number.isFinite(Number(entry.iv)) ? `${Number(entry.iv).toFixed(1)}%` : null
+    const exp = entry?.expiration ? formatExpiration(entry.expiration) : null
+    body = `
+      <div class="detail__grid">
+        <span class="detail__price">${esc(formatPrice(price, base))}</span>
+        <span class="detail__change detail__change--${change.tone}">${esc(change.text)}</span>
+        <span class="detail__type">${esc(priceTypeLabel(d.priceType))}</span>
+      </div>
+      <div class="detail__meta">
+        ${asOf ? `Atualizado em ${esc(asOf)}` : 'Hor\u00e1rio n\u00e3o informado'}
+        ${res.status === 'stale' ? ' \u00b7 Desatualizado' : ''}
+        ${exp ? ` \u00b7 Vence ${esc(exp)}` : ''}
+        ${vol ? ` \u00b7 Vol. est. ${esc(vol)}` : ''}
+      </div>`
+  }
+
+  return `<section class="section"><div class="detail">${header}${body}</div></section>`
+}
+
+/* ─── News ─── */
+function renderNews() {
+  const res = state.data.news
+  const head = `
+    <div class="section__head">
+      <span class="section__title">Mercado hoje</span>
+      ${statusBadge(res)}
+    </div>`
+
+  if (!res) {
+    return `<section class="section">${head}<div class="skeleton skeleton--line" role="status" aria-label="Carregando not\u00edcias"></div></section>`
+  }
+  if (res.status === 'error') {
+    return `<section class="section">${head}<div class="errorline"><span>Not\u00edcias indispon\u00edveis.</span><button class="retry" data-action="retry-news">Tentar novamente</button></div></section>`
+  }
+  const items = Array.isArray(res.data) ? res.data.slice(0, 3) : []
+  if (items.length === 0) {
+    return `<section class="section">${head}<p class="empty">Sem manchetes no momento.</p></section>`
+  }
+  const list = items.map(n => {
+    const meta = [n.source, n.timeAgo || formatDateTime(n.publishedAt)].filter(Boolean).map(esc).join(' \u00b7 ')
+    const title = `<span class="news-item__title">${esc(n.title || 'Sem t\u00edtulo')}</span>`
+    const inner = `${title}<span class="news-item__meta">${meta || 'Fonte n\u00e3o informada'}</span>`
+    if (isHttpsUrl(n.url)) {
+      return `<button class="news-item" data-action="open-news" data-url="${esc(n.url)}">${inner}</button>`
+    }
+    return `<div class="news-item">${inner}</div>`
+  }).join('')
+  return `<section class="section">${head}<div class="news">${list}</div></section>`
+}
+
+/* ─── CTA + footer ─── */
+function renderCTA() {
+  return `
+    <div class="cta">
+      <button class="cta__btn" data-action="open-platform">
+        Conhecer o Opera Trader ${Icon.ChevronRight}
+      </button>
+    </div>`
+}
+
+function renderFooter() {
+  const mode = state.useMock ? 'Dados ilustrativos' : 'Uso informativo'
+  return `
+    <footer class="footer">
+      <span class="footer__brand">${esc(mode)}</span>
+      <p class="footer__note">Conte\u00fado informativo e educacional. N\u00e3o constitui recomenda\u00e7\u00e3o, oferta ou consultoria de investimentos.</p>
+    </footer>`
+}
+
+function renderMain() {
+  return `
+    ${renderHeader()}
+    ${renderPairs()}
+    ${renderAgenda()}
+    ${renderMacro()}
+    ${renderTerm()}
+    ${renderSearch()}
+    ${renderFavorites()}
+    ${renderDetail()}
+    ${renderNews()}
+    ${renderCTA()}
+    ${renderFooter()}
+  `
+}
+
+/* ─── Settings ─── */
+function tierBadge(tier) {
+  const map = {
+    free: { label: 'Free', cls: 'badge--free' },
+    founder: { label: 'Founder Member', cls: 'badge--founder' },
+    pro: { label: 'Pro', cls: 'badge--pro' },
+  }
+  const m = map[tier] || map.free
+  return `<span class="badge ${m.cls}">${m.label}</span>`
+}
+
+function renderSettings() {
+  return `
+    <div class="settings">
+      <div class="settings__header">
+        <button class="settings__back" data-action="back" aria-label="Voltar" title="Voltar">${Icon.ArrowLeft}</button>
+        <h2 class="settings__title">Configura\u00e7\u00f5es</h2>
+      </div>
+
+      <div class="settings__section">
+        <span class="settings__label">Tema</span>
+        <button class="settings__btn" data-action="toggle-theme">
+          <span>${state.theme === 'dark' ? 'Escuro' : 'Claro'}</span>
+          <span class="muted">${state.theme === 'dark' ? Icon.Sun : Icon.Moon}</span>
+        </button>
+      </div>
+
+      <div class="settings__section">
+        <span class="settings__label">Dados</span>
+        <button class="settings__btn" data-action="toggle-demo">
+          <span>Modo demonstra\u00e7\u00e3o (DEMO)</span>
+          <span>${state.useMock ? 'Ativado' : 'Desativado'}</span>
+        </button>
+        <p class="settings__note">No modo DEMO os dados s\u00e3o ilustrativos e n\u00e3o consultam o Worker.</p>
+      </div>
+
+      <div class="settings__section">
+        <span class="settings__label">Licen\u00e7a</span>
+        <div class="settings__row">
+          <input class="settings__input" type="text" placeholder="Chave de licen\u00e7a"
+            data-license-input value="${esc(state.licenseKey)}" aria-label="Chave de licen\u00e7a" />
+          <button class="settings__validate" data-action="validate-license">Validar</button>
+        </div>
+        <div class="settings__row" style="align-items:center">
+          <span class="settings__note">Status:</span>
+          ${tierBadge(state.licenseTier)}
+        </div>
+        <p class="settings__note">O selo \u00e9 informativo e n\u00e3o altera os dados exibidos.</p>
+      </div>
+
+      <div class="settings__section">
+        <span class="settings__label">Favoritos (${state.favorites.length}/5)</span>
+        ${state.favorites.length === 0
+          ? '<p class="settings__empty">Nenhum favorito ainda.</p>'
+          : state.favorites.map(sym => `
+              <div class="settings__fav-row">
+                <span class="settings__fav-symbol">${esc(sym)}</span>
+                <button class="settings__fav-remove" data-action="remove-favorite" data-symbol="${esc(sym)}">Remover</button>
+              </div>
+            `).join('')
+        }
+      </div>
+    </div>
+  `
+}
+
+/* ─── Data loading ─── */
+async function loadAll({ force = false } = {}) {
+  const seq = ++refreshSeq
+  state.useMock = await getUseMock()
+  if (force) state.refreshing = true
+  scheduleRender()
+
+  const [health, watchlist, calendar, macro, termWIN, termWDO, news] = await Promise.all([
+    ping(),
+    fetchWatchlist(force),
+    fetchCalendar(force),
+    fetchMacro(force),
+    fetchTermStructure('WIN', force),
+    fetchTermStructure('WDO', force),
+    fetchNews(force),
+  ])
+  if (seq !== refreshSeq) return
+
+  state.backend = { ok: health.ok, checked: true, error: health.error || null }
+  state.data.watchlist = watchlist
+  state.data.calendar = calendar
+  state.data.macro = macro
+  state.data.termWIN = termWIN
+  state.data.termWDO = termWDO
+  state.data.news = news
+  state.booting = false
+  state.refreshing = false
+
+  reconcileSelection()
+  scheduleRender()
+  loadDetail(state.selectedSymbol, { force })
+}
+
+function reconcileSelection() {
+  const available = []
+  for (const group of termGroups()) {
+    for (const t of group.contracts) available.push(t.contract)
+  }
+  let sym = state.selectedSymbol
+  if (!sym) {
+    sym = currentContractFor('WIN')
+  } else if (available.length > 0 && !available.includes(sym)) {
+    const base = baseOf(sym)
+    if (base === 'WIN' || base === 'WDO') sym = currentContractFor(base)
+  }
+  state.selectedSymbol = sym
+}
+
+async function loadDetail(symbol, { force = false } = {}) {
+  if (!symbol) return
+  const seq = ++detailSeq
+  if (!state.data.quote || state.data.quote?.data?.symbol !== symbol) {
+    state.data.quote = null
+    scheduleRender()
+  }
+  const res = await fetchQuote(symbol, force)
+  if (seq !== detailSeq) return
+  state.data.quote = res
+  scheduleRender()
+}
+
+/* ─── Per-block retries (só a consulta correspondente) ─── */
+async function retryWatchlist() {
+  const res = await fetchWatchlist(true)
+  state.data.watchlist = res
+  reconcileSelection()
+  scheduleRender()
+}
+async function retryCalendar() {
+  state.data.calendar = await fetchCalendar(true)
+  scheduleRender()
+}
+async function retryMacro() {
+  state.data.macro = await fetchMacro(true)
+  scheduleRender()
+}
+async function retryTerm() {
+  const [w, d] = await Promise.all([fetchTermStructure('WIN', true), fetchTermStructure('WDO', true)])
+  state.data.termWIN = w
+  state.data.termWDO = d
+  reconcileSelection()
+  scheduleRender()
+}
+async function retryNews() {
+  state.data.news = await fetchNews(true)
+  scheduleRender()
+}
+async function retryQuote() {
+  if (state.selectedSymbol) await loadDetail(state.selectedSymbol, { force: true })
+}
+
+/* ─── Interactions ─── */
+function selectSymbol(symbol) {
+  if (!symbol) return
+  state.selectedSymbol = symbol
+  state.data.quote = null
+  document.querySelector('[data-search-dropdown]')?.classList.remove('search__dropdown--open')
+  loadDetail(symbol, { force: false })
+  render()
+}
+
+async function toggleDemo() {
+  const next = !state.useMock
+  await setUseMock(next)
+  state.useMock = next
+  /* Isola dados reais de simulados */
+  state.data = { watchlist: null, calendar: null, macro: null, termWIN: null, termWDO: null, news: null, quote: null }
+  state.booting = true
+  await loadAll({ force: true })
+}
+
+function openUrl(url) {
+  if (!isHttpsUrl(url)) return
+  chrome.tabs.create({ url }).catch(() => window.open(url, '_blank', 'noopener'))
+}
 
 function bindEvents() {
-  /* Theme toggle (reloads calendar iframe) */
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-action]')
-
     if (!t) return
-
     const action = t.dataset.action
 
     if (action === 'toggle-theme') {
@@ -536,40 +878,30 @@ function bindEvents() {
       render()
       return
     }
-
-    if (action === 'toggle-mock') {
-      const next = !state.useMock
-      setUseMock(next).then(() => {
-        state.useMock = next
-        loadAsset(state.selectedSymbol)
-      })
-      return
-    }
-
     if (action === 'refresh') {
-      loadAsset(state.selectedSymbol, { force: true })
+      if (state.refreshing || state.booting) return
+      loadAll({ force: true })
       return
     }
-
     if (action === 'open-settings') { state.view = 'settings'; render(); return }
     if (action === 'back') { state.view = 'main'; render(); return }
-
-    if (action === 'open-platform') {
-      const url = 'https://www.operatrader.com.br/?utm_source=extension&utm_medium=cta&utm_campaign=morning_call'
-      chrome.tabs.create({ url }).catch(() => window.open(url, '_blank'))
+    if (action === 'toggle-demo') { toggleDemo(); return }
+    if (action === 'select-symbol') {
+      const sym = t.dataset.symbol
+      const input = document.querySelector('[data-search-input]')
+      if (input) input.value = sym
+      selectSymbol(sym)
       return
     }
-
-    if (action === 'open-news') {
-      const url = t.dataset.url
-      if (url && url !== '#' && url.startsWith('http')) {
-        chrome.tabs.create({ url }).catch(() => window.open(url, '_blank'))
-      }
-      return
-    }
-
+    if (action === 'retry-watchlist') { retryWatchlist(); return }
+    if (action === 'retry-calendar') { retryCalendar(); return }
+    if (action === 'retry-macro') { retryMacro(); return }
+    if (action === 'retry-term') { retryTerm(); return }
+    if (action === 'retry-news') { retryNews(); return }
+    if (action === 'retry-quote') { retryQuote(); return }
     if (action === 'toggle-favorite') {
       const sym = t.dataset.symbol
+      if (!sym) return
       const idx = state.favorites.indexOf(sym)
       if (idx >= 0) state.favorites.splice(idx, 1)
       else if (state.favorites.length < 5) state.favorites.push(sym)
@@ -577,7 +909,12 @@ function bindEvents() {
       render()
       return
     }
-
+    if (action === 'remove-favorite') {
+      state.favorites = state.favorites.filter(s => s !== t.dataset.symbol)
+      chrome.storage.sync.set({ favorites: state.favorites }).catch(() => {})
+      render()
+      return
+    }
     if (action === 'validate-license') {
       const input = document.querySelector('[data-license-input]')
       if (!input) return
@@ -590,40 +927,23 @@ function bindEvents() {
       })
       return
     }
-
-    if (action === 'remove-favorite') {
-      state.favorites = state.favorites.filter(s => s !== t.dataset.symbol)
-      chrome.storage.sync.set({ favorites: state.favorites }).catch(() => {})
-      render()
+    if (action === 'open-platform') {
+      openUrl('https://www.operatrader.com.br/?utm_source=extension&utm_medium=cta&utm_campaign=morning_call')
       return
     }
-
-    if (action === 'select-watchlist') {
-      const sym = t.dataset.symbol
-      state.selectedSymbol = sym
-      loadAsset(sym)
+    if (action === 'open-news') {
+      openUrl(t.dataset.url)
       return
     }
   })
 
-  /* Search input */
-  document.addEventListener('click', (e) => {
-    const opt = e.target.closest('[data-symbol]')
-    if (!opt || !opt.closest('[data-search-dropdown]')) return
-    const sym = opt.dataset.symbol
-    state.selectedSymbol = sym
-    const input = document.querySelector('[data-search-input]')
-    if (input) input.value = sym
-    document.querySelector('[data-search-dropdown]')?.classList.remove('search__dropdown--open')
-    loadAsset(sym)
-  })
-
-  let searchTimer
+  let inputValue = ''
   document.addEventListener('input', (e) => {
     const input = e.target.closest('[data-search-input]')
     if (!input) return
+    inputValue = input.value
     clearTimeout(searchTimer)
-    searchTimer = setTimeout(() => applySearchFilter(input.value), 100)
+    searchTimer = setTimeout(() => applySearchFilter(inputValue), 90)
   })
 
   document.addEventListener('keydown', (e) => {
@@ -633,14 +953,10 @@ function bindEvents() {
     if (!val) return
     const visible = document.querySelector('[data-search-dropdown] [data-symbol]:not([style*="display: none"])')
     if (visible) {
-      state.selectedSymbol = visible.dataset.symbol
-      input.value = visible.dataset.symbol
-      loadAsset(visible.dataset.symbol)
-    } else if (SYMBOL_RE.test(val)) {
-      state.selectedSymbol = val
-      loadAsset(val)
+      selectSymbol(visible.dataset.symbol)
+    } else if (/^[A-Z0-9]{2,12}$/.test(val)) {
+      selectSymbol(val)
     }
-    document.querySelector('[data-search-dropdown]')?.classList.remove('search__dropdown--open')
   })
 
   document.addEventListener('focusin', (e) => {
@@ -654,99 +970,41 @@ function bindEvents() {
     if (!e.target.closest('[data-license-input]')) return
     if (e.key === 'Enter') document.querySelector('[data-action="validate-license"]')?.click()
   })
-}
 
-/* ─── Data loading ─── */
-
-let loadSeq = 0
-
-async function loadAsset(symbol, { force = false } = {}) {
-  const seq = ++loadSeq
-  state.loading = true
-  state.error = null
-  state.ivPercentile = null
-  state.useMock = await getUseMock()
-  render()
-
-  const [health, watchlist, quote, tsWIN, tsWDO, macro, news, calendar] = await Promise.all([
-    ping(),
-    fetchWatchlist(force),
-    fetchQuote(symbol, force),
-    fetchTermStructure('WIN', force),
-    fetchTermStructure('WDO', force),
-    fetchMacro(force),
-    fetchNews(force),
-    fetchCalendar(force),
-  ])
-  if (seq !== loadSeq) return
-
-  state.backendOnline = health.ok
-
-  state.watchlist = watchlist || []
-
-  state.loading = false
-
-  if (quote) {
-    state.asset = quote
-  } else if (!state.useMock) {
-    state.error = 'Backend offline ou cota\u00e7\u00e3o indispon\u00edvel.'
-  } else {
-    state.error = 'Dados indispon\u00edveis.'
-  }
-
-  state.termStructures = {
-    WIN: tsWIN || [],
-    WDO: tsWDO || [],
-  }
-  state.macro = macro || null
-  state.news = news || null
-  state.calendarEvents = calendar || []
-
-  /* IV percentile (non-blocking) */
-  fetchIVPercentile(symbol).then(p => {
-    if (seq !== loadSeq) return
-    state.ivPercentile = p
-    reanalyse()
-    render()
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelector('[data-search-dropdown]')?.classList.remove('search__dropdown--open')
+    }
   })
-
-  reanalyse()
-  render()
-}
-
-function reanalyse() {
-  const events = state.calendarEvents
-  state.analystNote = generateAnalystNote(events, state.ivPercentile)
 }
 
 /* ─── Init ─── */
-
 async function init() {
   try {
     const prefs = await chrome.storage.sync.get(['theme', 'licenseTier', 'licenseKey', 'favorites'])
     if (prefs.theme) state.theme = prefs.theme
     if (prefs.licenseTier) state.licenseTier = prefs.licenseTier
     if (prefs.licenseKey) state.licenseKey = prefs.licenseKey
-    if (prefs.favorites) state.favorites = prefs.favorites
+    if (Array.isArray(prefs.favorites)) state.favorites = prefs.favorites
   } catch {}
 
   state.useMock = await getUseMock()
+  state.selectedSymbol = resolveCurrentContract('WIN')
 
   document.documentElement.setAttribute('data-theme', state.theme)
   bindEvents()
 
   window.addEventListener('message', (e) => {
     if (e.origin !== 'https://www.tradingview-widget.com') return
+    const frame = document.getElementById('tv-calendar')
+    if (!frame || e.source !== frame.contentWindow) return
     if (e.data?.name === 'tv-widget-resize-iframe') {
-      const frame = document.getElementById('tv-calendar')
-      if (!frame || e.source !== frame.contentWindow) return
       if (e.data.data?.width) frame.style.width = e.data.data.width + 'px'
       if (e.data.data?.height) frame.style.height = e.data.data.height + 'px'
     }
   })
 
-  state.selectedSymbol = resolveCurrentContract('WIN')
-  await loadAsset(state.selectedSymbol)
+  await loadAll({ force: false })
 }
 
 document.addEventListener('DOMContentLoaded', init)

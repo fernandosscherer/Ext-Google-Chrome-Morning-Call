@@ -210,6 +210,34 @@ async function health() {
   return json({ ok: true, ts: new Date().toISOString() })
 }
 
+/* Deriva o tipo da fonte do preço sem recalcular a variação do provedor.
+   settlement => "Ajuste"; close => "Fechamento"; senão "reference". */
+function priceTypeOf(q) {
+  if (q?.settlement != null) return 'settlement'
+  if (q?.close != null) return 'close'
+  return 'reference'
+}
+
+function quoteTimestamp(q) {
+  if (q?.date == null) return null
+  if (typeof q.date === 'number') return new Date(q.date * 1000).toISOString()
+  const d = new Date(q.date)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+function mapQuote(q) {
+  return {
+    symbol: q.symbol,
+    name: q.assetDescription,
+    price: q.settlement ?? q.close ?? null,
+    priceType: priceTypeOf(q),
+    changePercent: q.oscillationPct ?? 0,
+    isMarketOpen: isB3MarketOpen(),
+    lastClose: q.close ?? null,
+    lastUpdated: quoteTimestamp(q),
+  }
+}
+
 async function handleQuote(url, env) {
   const symbol = url.searchParams.get('symbol')
   if (!symbol) return json({ error: 'symbol required' }, 400)
@@ -218,16 +246,7 @@ async function handleQuote(url, env) {
   const q = data.quotes?.[0]
   if (!q) return json({ error: 'not found' }, 404)
 
-  return json({
-    symbol: q.symbol,
-    name: q.assetDescription,
-    price: q.settlement ?? q.close,
-    change: q.settlement ? q.settlement - (q.close ?? q.settlement) : 0,
-    changePercent: q.oscillationPct ?? 0,
-    isMarketOpen: isB3MarketOpen(),
-    lastClose: q.close,
-    lastUpdated: q.date ? new Date(q.date * 1000).toISOString() : null,
-  })
+  return json(mapQuote(q))
 }
 
 async function handleWatchlist(url, env) {
@@ -238,13 +257,7 @@ async function handleWatchlist(url, env) {
 
   const data = await brapi(`/futures/quote?symbols=${encodeURIComponent(query)}`, env)
 
-  return json((data.quotes || []).map(q => ({
-    symbol: q.symbol,
-    name: q.assetDescription,
-    price: q.settlement ?? q.close,
-    changePercent: q.oscillationPct ?? 0,
-    lastClose: q.close,
-  })))
+  return json((data.quotes || []).map(mapQuote))
 }
 
 async function handleTermStructure(url, env) {
@@ -295,10 +308,10 @@ async function handleTermStructure(url, env) {
 }
 
 async function handleMacro(env) {
-  const results = {}
+  const results = { series: {} }
   const errors = {}
 
-  const promises = Object.entries(BCB_SERIES).map(async ([slug]) => {
+  const promises = Object.keys(BCB_SERIES).map(async (slug) => {
     try {
       const { value, date } = await bcb(slug, env)
       return { slug, value, date }
@@ -311,15 +324,25 @@ async function handleMacro(env) {
   data.forEach(d => {
     if (d.error) {
       results[d.slug] = null
+      results.series[d.slug] = null
       errors[d.slug] = d.error
     } else {
+      /* Campos flat (compat) + série com data própria. */
       results[d.slug] = d.value
-      results.asOf = d.date
+      results.series[d.slug] = { value: d.value, date: d.date }
     }
   })
 
+  /* asOf comum apenas se todas as séries presentes tiverem a mesma data. */
+  const dates = Object.values(results.series).filter(Boolean).map(s => s.date)
+  const allPresent = Object.values(results.series).every(Boolean)
+  if (allPresent && dates.length > 0 && dates.every(d => d === dates[0])) {
+    results.asOf = dates[0]
+  }
+
   if (Object.keys(errors).length > 0) {
     results._partial = true
+    results._errors = errors
   }
   return json(results)
 }
@@ -331,55 +354,71 @@ async function handleNews(url) {
 }
 
 /* ─── Economic calendar (HEURÍSTICA, não é o calendário oficial) ───
-   As datas abaixo são aproximações recorrentes (Copom/FOMC ~ dia 15-30,
-   IPCA ~ dias 8-10, Payroll = primeira sexta). Todo evento sai com
-   `estimated: true` para a UI não tratar como agenda oficial.
-   Fontes reais: bcbrazil, TradingView — usar quando houver integração. */
+   Datas recorrentes aproximadas (Copom/FOMC em datas fixas do mês, IPCA
+   nos dias 8-10, Balanço Comercial no dia 1, Payroll = primeira sexta).
+   Geramos uma janela para frente (padrão 7 dias) com `date`, `time`,
+   `timezone` e `startsAt` (ISO -03:00) para permitir "próximo evento".
+   Todo evento sai com `estimated: true`.
+   LIMITAÇÃO: não considera feriados oficiais da B3; BRT sem horário de verão. */
 
-function getEconomicCalendar() {
+const CALENDAR_WINDOW_DAYS = 7
+
+const COPOM_DATES = [
+  { m: 0, d: 29 }, { m: 1, d: 5 }, { m: 2, d: 19 }, { m: 3, d: 16 },
+  { m: 4, d: 7 }, { m: 5, d: 18 }, { m: 6, d: 30 }, { m: 7, d: 20 },
+  { m: 8, d: 17 }, { m: 9, d: 29 }, { m: 10, d: 12 }, { m: 11, d: 10 },
+]
+const FOMC_DATES = [
+  { m: 0, d: 29 }, { m: 1, d: 1 }, { m: 2, d: 19 }, { m: 3, d: 30 },
+  { m: 4, d: 7 }, { m: 5, d: 18 }, { m: 6, d: 30 }, { m: 7, d: 30 },
+  { m: 8, d: 17 }, { m: 9, d: 29 }, { m: 10, d: 5 }, { m: 11, d: 17 },
+]
+
+function pad2(n) { return String(n).padStart(2, '0') }
+
+function eventAt(y, m, d, time, payload) {
+  const date = `${y}-${pad2(m + 1)}-${pad2(d)}`
+  return {
+    ...payload,
+    date,
+    time,
+    timezone: 'America/Sao_Paulo',
+    startsAt: `${date}T${time}:00-03:00`,
+    estimated: true,
+  }
+}
+
+function firstFriday(y, m) {
+  const first = new Date(Date.UTC(y, m, 1))
+  return 1 + ((5 - first.getUTCDay() + 7) % 7)
+}
+
+function getEconomicCalendar(daysAhead = CALENDAR_WINDOW_DAYS) {
   const brt = getBrtParts()
-  const day = brt.day
-  const month = brt.month - 1
-  const year = brt.year
+  const base = Date.UTC(brt.year, brt.month - 1, brt.day)
   const events = []
 
-  const copomDates = [
-    { m: 0, d: 29 }, { m: 1, d: 5 }, { m: 2, d: 19 }, { m: 3, d: 16 },
-    { m: 4, d: 7 }, { m: 5, d: 18 }, { m: 6, d: 30 }, { m: 7, d: 20 },
-    { m: 8, d: 17 }, { m: 9, d: 29 }, { m: 10, d: 12 }, { m: 11, d: 10 },
-  ]
-  for (const cd of copomDates) {
-    if (cd.m === month && Math.abs(cd.d - day) <= 1) {
-      events.push({ event: 'Copom (Taxa Selic)', time: '15:00', impact: 3, country: 'BR', estimated: true })
+  for (let i = 0; i <= daysAhead; i++) {
+    const dt = new Date(base + i * 86400000)
+    const y = dt.getUTCFullYear()
+    const m = dt.getUTCMonth()
+    const d = dt.getUTCDate()
+
+    if (COPOM_DATES.some(c => c.m === m && c.d === d)) {
+      events.push(eventAt(y, m, d, '15:00', { event: 'Copom (Taxa Selic)', impact: 3, country: 'BR' }))
     }
-  }
-
-  if (day <= 10) {
-    const ipcaDates = [8, 9, 10]
-    if (ipcaDates.includes(day)) {
-      events.push({ event: 'IPCA (IBGE)', time: '09:00', impact: 2, country: 'BR', estimated: true })
+    if (FOMC_DATES.some(c => c.m === m && c.d === d)) {
+      events.push(eventAt(y, m, d, '15:00', { event: 'FOMC (Fed)', impact: 3, country: 'US' }))
     }
-  }
-
-  if (day >= 1 && day <= 7 && month % 3 === 0) {
-    events.push({ event: 'Balanco Comercial', time: '09:00', impact: 2, country: 'BR', estimated: true })
-  }
-
-  const fomcDates = [
-    { m: 0, d: 29 }, { m: 1, d: 1 }, { m: 2, d: 19 }, { m: 3, d: 30 },
-    { m: 4, d: 7 }, { m: 5, d: 18 }, { m: 6, d: 30 }, { m: 7, d: 30 },
-    { m: 8, d: 17 }, { m: 9, d: 29 }, { m: 10, d: 5 }, { m: 11, d: 17 },
-  ]
-  for (const fd of fomcDates) {
-    if (fd.m === month && Math.abs(fd.d - day) <= 1) {
-      events.push({ event: 'FOMC (Fed)', time: '15:00', impact: 3, country: 'US', estimated: true })
+    if (d === 8 || d === 9 || d === 10) {
+      events.push(eventAt(y, m, d, '09:00', { event: 'IPCA (IBGE)', impact: 2, country: 'BR' }))
     }
-  }
-
-  const firstOfMonth = new Date(Date.UTC(year, month, 1))
-  const firstFriday = 1 + ((5 - firstOfMonth.getUTCDay() + 7) % 7)
-  if (day === firstFriday) {
-    events.push({ event: 'Payroll (EUA)', time: '09:30', impact: 3, country: 'US', estimated: true })
+    if (d === 1 && m % 3 === 0) {
+      events.push(eventAt(y, m, d, '09:00', { event: 'Balan\u00e7o Comercial', impact: 2, country: 'BR' }))
+    }
+    if (d === firstFriday(y, m)) {
+      events.push(eventAt(y, m, d, '09:30', { event: 'Payroll (EUA)', impact: 3, country: 'US' }))
+    }
   }
 
   return events
