@@ -27,7 +27,7 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--color-petrol) 30%, transparent);
+  background: color-mix(in srgb, var(--color-brand) 30%, transparent);
   color: var(--color-heading);
 }
 
@@ -169,20 +169,16 @@ h1, h2, h3, h4 {
 }
 
 .nav__logo {
-  width: 24px;
-  height: 24px;
-  color: var(--color-petrol);
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
 }
 
-.nav__logoSvg {
+.nav__logo-img {
   width: 100%;
   height: 100%;
+  object-fit: contain;
   display: block;
-}
-
-.nav__logoSvg .cup-body {
-  fill: var(--color-surface-soft);
 }
 
 .nav__name {
@@ -245,8 +241,8 @@ h1, h2, h3, h4 {
   gap: 8px;
   padding: 10px 20px;
   border-radius: 10px;
-  background: var(--color-petrol);
-  color: #fff;
+  background: var(--color-brand);
+  color: var(--color-canvas);
   font-family: var(--font-body);
   font-size: 14px;
   font-weight: 700;
@@ -335,13 +331,13 @@ h1, h2, h3, h4 {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 20px;
-  background: color-mix(in srgb, var(--color-petrol) 10%, transparent);
-  color: var(--color-petrol);
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  color: var(--color-brand);
   font-family: var(--font-data);
   font-size: 12px;
   font-weight: 500;
   margin-bottom: 20px;
-  border: 1px solid color-mix(in srgb, var(--color-petrol) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
 }
 
 .hero__title {
@@ -440,10 +436,11 @@ h1, h2, h3, h4 {
   gap: 8px;
 }
 
-.mockup__logo {
-  width: 18px;
-  height: 18px;
-  color: var(--color-petrol);
+.mockup__logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .mockup__title {
@@ -572,13 +569,13 @@ h1, h2, h3, h4 {
 .mockup__tsBar {
   flex: 1;
   border-radius: 3px 3px 0 0;
-  background: var(--color-petrol);
+  background: var(--color-brand);
   opacity: 0.6;
 }
 
 .mockup__tsBar--current {
   opacity: 1;
-  background: var(--color-bronze);
+  background: var(--color-brand);
 }
 
 .mockup__analyst {
@@ -599,13 +596,13 @@ h1, h2, h3, h4 {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--color-petrol);
+  background: var(--color-brand);
 }
 
 .mockup__analystLabel {
   font-size: 10px;
   font-weight: 500;
-  color: var(--color-petrol);
+  color: var(--color-brand);
 }
 
 .mockup__analystText {
@@ -706,7 +703,7 @@ h1, h2, h3, h4 {
   font-family: var(--font-data);
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-petrol);
+  color: var(--color-brand);
   white-space: nowrap;
   min-width: 50px;
   text-align: right;
@@ -718,7 +715,7 @@ h1, h2, h3, h4 {
   height: 12px;
   border-radius: 50%;
   background: var(--color-surface);
-  border: 2px solid var(--color-petrol);
+  border: 2px solid var(--color-brand);
   flex-shrink: 0;
   margin-top: 4px;
   position: relative;
@@ -726,14 +723,14 @@ h1, h2, h3, h4 {
 }
 
 .timeline__step--current .timeline__marker {
-  background: var(--color-petrol);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-petrol) 25%, transparent);
+  background: var(--color-brand);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 25%, transparent);
 }
 
 .timeline__step--end .timeline__marker {
-  background: var(--color-bronze);
-  border-color: var(--color-bronze);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-bronze) 25%, transparent);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-brand) 25%, transparent);
 }
 
 .timeline__content {
@@ -814,7 +811,7 @@ h1, h2, h3, h4 {
 }
 
 .card:hover {
-  border-color: var(--color-petrol);
+  border-color: var(--color-brand);
   transform: translateY(-2px);
   box-shadow: 0 8px 30px rgba(0,0,0,0.15);
 }
@@ -826,8 +823,8 @@ h1, h2, h3, h4 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--color-petrol) 10%, transparent);
-  color: var(--color-petrol);
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  color: var(--color-brand);
   flex-shrink: 0;
 }
 
@@ -1150,10 +1147,11 @@ h1, h2, h3, h4 {
   gap: 8px;
 }
 
-.footer__logo {
-  width: 20px;
-  height: 20px;
-  color: var(--color-petrol);
+.footer__logo-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
 }
 
 .footer__name {
@@ -1242,13 +1240,13 @@ h1, h2, h3, h4 {
 /* ─── Focus visible ─── */
 
 :focus-visible {
-  outline: 2px solid var(--color-petrol);
+  outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
 
 .btn-primary:focus-visible,
 .nav__themeBtn:focus-visible {
-  outline: 2px solid var(--color-petrol);
+  outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
 

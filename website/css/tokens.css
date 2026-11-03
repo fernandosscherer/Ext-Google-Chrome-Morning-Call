@@ -1,36 +1,54 @@
 :root {
-  --font-heading: 'Newsreader', 'Georgia', 'Times New Roman', serif;
-  --font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-data: 'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace;
 
-  --color-petrol: #00A7B5;
-  --color-bronze: #D79A32;
-  --color-success: #37D67A;
-  --color-warning: #D79A32;
-  --color-danger: #D85A4B;
+  --color-brand: #F5C16C;
+  --color-up: #4ADEA5;
+  --color-down: #FB7D88;
+  --color-flat: #A9BBC9;
+  --color-stale: #FACC6B;
 }
 
 [data-theme="dark"] {
-  --color-canvas: #02080B;
-  --color-surface: #071A20;
-  --color-surface-soft: #0D252B;
-  --color-border: #17363D;
-  --color-heading: #F2EFE7;
-  --color-text: #C9D0CD;
-  --color-muted: #778987;
+  --color-canvas: #0C141C;
+  --color-surface: #14222D;
+  --color-surface-soft: #1A2A36;
+  --color-border: #2C3E4C;
+  --color-border-strong: #3A4F60;
+  --color-heading: #F1F5F9;
+  --color-text: #DCE6EE;
+  --color-muted: #A9BBC9;
+  --color-brand: #F5C16C;
+  --color-up: #4ADEA5;
+  --color-down: #FB7D88;
+  --color-flat: #A9BBC9;
+  --color-stale: #FACC6B;
+  /* aliases legados */
+  --color-petrol: var(--color-brand);
+  --color-bronze: var(--color-brand);
+  --color-success: var(--color-up);
+  --color-warning: var(--color-stale);
+  --color-danger: var(--color-down);
 }
 
 [data-theme="light"] {
-  --color-canvas: #F4F3EF;
+  --color-canvas: #EEF1F4;
   --color-surface: #FFFFFF;
-  --color-surface-soft: #FAFAF7;
-  --color-border: #DDD9CF;
-  --color-heading: #111820;
-  --color-text: #3F474C;
-  --color-muted: #747B78;
-  --color-petrol: #123F48;
-  --color-bronze: #A77A38;
-  --color-success: #267451;
-  --color-warning: #B68A35;
-  --color-danger: #9B3A32;
+  --color-surface-soft: #F4F7F9;
+  --color-border: #D5DEE6;
+  --color-border-strong: #B9C6D1;
+  --color-heading: #0C141C;
+  --color-text: #23303B;
+  --color-muted: #5A6B78;
+  --color-brand: #8A6112;
+  --color-up: #1B7A54;
+  --color-down: #B23A46;
+  --color-flat: #5A6B78;
+  --color-stale: #8A6508;
+  --color-petrol: var(--color-brand);
+  --color-bronze: var(--color-brand);
+  --color-success: var(--color-up);
+  --color-warning: var(--color-stale);
+  --color-danger: var(--color-down);
 }
