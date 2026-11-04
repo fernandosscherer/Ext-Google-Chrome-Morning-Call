@@ -164,32 +164,42 @@ async function bcb(slug, env) {
 
 /* ─── Google News RSS parser ─── */
 
-async function googleNews(limit = 3) {
+async function fetchNewsFeed(feedUrl, fallbackSource, limit) {
   const res = await fetch(
-    'https://news.google.com/rss/search?q=economia+brasil+mercado&hl=pt-BR&gl=BR&ceid=BR:pt-419',
+    feedUrl,
     {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
         'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9',
       },
+      signal: AbortSignal.timeout(4500),
     }
   )
-  if (!res.ok) throw new Error(`Google News ${res.status}`)
+  if (!res.ok) throw new Error(`${fallbackSource} ${res.status}`)
   const xml = await res.text()
+  if (!/<rss\b/i.test(xml)) throw new Error(`Invalid RSS from ${fallbackSource}`)
   const items = []
   const re = /<item>([\s\S]*?)<\/item>/g
   let match
   while ((match = re.exec(xml)) && items.length < limit) {
     const block = match[1]
-    const title = block.match(/<title>(.*?)<\/title>/)?.[1] ?? ''
-    const link = block.match(/<link>(.*?)<\/link>/)?.[1] ?? '#'
+    const title = rssText(block.match(/<title>([\s\S]*?)<\/title>/)?.[1])
+    const link = rssText(block.match(/<link>([\s\S]*?)<\/link>/)?.[1])
+    if (!title || !link.startsWith('https://')) continue
     const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? ''
-    const source = block.match(/<source[^>]*>(.*?)<\/source>/)?.[1] ?? 'Google News'
+    const source = rssText(block.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1]) || fallbackSource
     const timeAgo = pubDate ? formatTimeAgo(pubDate) : ''
     items.push({ title, url: link, source, timeAgo })
   }
   return items
+}
+
+function rssText(value = '') {
+  return value.trim().replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, '$1')
+    .replace(/&(?:amp|lt|gt|quot|apos|#39);/g, entity => ({
+      '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&#39;': "'",
+    })[entity]).trim()
 }
 
 function formatTimeAgo(dateStr) {
@@ -348,9 +358,23 @@ async function handleMacro(env) {
 }
 
 async function handleNews(url) {
-  const limit = parseInt(url.searchParams.get('limit') || '3', 10)
-  const items = await googleNews(Math.min(limit, 10))
-  return json(items)
+  const requested = parseInt(url.searchParams.get('limit') || '3', 10)
+  const limit = Number.isFinite(requested) ? Math.min(10, Math.max(1, requested)) : 3
+  const feeds = [
+    ['https://news.google.com/rss/search?q=economia+brasil+mercado&hl=pt-BR&gl=BR&ceid=BR:pt-419', 'Google News'],
+    ['https://agenciabrasil.ebc.com.br/rss/economia/feed.xml', 'Agência Brasil'],
+  ]
+  let receivedFeed = false
+  for (const [feedUrl, source] of feeds) {
+    try {
+      const items = await fetchNewsFeed(feedUrl, source, limit)
+      receivedFeed = true
+      if (items.length) return json(items)
+    } catch (error) {
+      console.warn('News feed unavailable', source, error.message)
+    }
+  }
+  return receivedFeed ? json([]) : json({ error: 'News feeds unavailable' }, 502)
 }
 
 /* ─── Economic calendar (HEURÍSTICA, não é o calendário oficial) ───
