@@ -346,6 +346,30 @@ function currentContractFor(base) {
   return (arr.find(t => t.isCurrent) || {}).contract || expected
 }
 
+function renderTermChart(contracts) {
+  const ordered = contracts
+    .filter(t => typeof t.expiration === 'string' && Number.isFinite(Date.parse(t.expiration)))
+    .sort((a, b) => Date.parse(a.expiration) - Date.parse(b.expiration))
+  const price = value => value != null && value !== '' && Number.isFinite(Number(value))
+  const field = ['settlement', 'close'].find(key => ordered.filter(t => price(t[key])).length >= 2)
+  if (!field) return ''
+  const values = ordered.filter(t => price(t[field])).map(t => Number(t[field]))
+  const min = Math.min(...values)
+  const range = Math.max(...values) - min
+  const points = values.map((value, i) => {
+    const x = 4 + i * 152 / (values.length - 1)
+    const y = range ? 38 - (value - min) * 34 / range : 21
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  const label = field === 'settlement' ? 'Ajuste por vencimento' : 'Fechamento por vencimento'
+  return `<figure style="margin:6px 0">
+    <svg viewBox="0 0 160 42" width="100%" height="42" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <figcaption class="term__vol">${label}</figcaption>
+  </figure>`
+}
+
 function renderTerm() {
   const groups = termGroups()
   const head = `
@@ -401,6 +425,7 @@ function renderTerm() {
           <span class="term__group-title">${esc(base)} \u00b7 ${esc(assetName(base))}</span>
           ${vol}
         </div>
+        ${renderTermChart(contracts)}
         ${rows}
       </div>`
   }).join('')
